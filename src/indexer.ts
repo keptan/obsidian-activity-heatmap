@@ -8,7 +8,8 @@ export interface ImportProgress {
 	completedFiles: number;
 	totalFiles: number;
 	versions: number;
-	currentPath: string;
+	activePaths: string[];
+	fileCompleted: boolean;
 }
 
 export class HistoryIndexer {
@@ -21,7 +22,7 @@ export class HistoryIndexer {
 		this.cancelled = true;
 	}
 
-	async indexFile(file: TFile, full = false): Promise<number> {
+	async indexFile(file: TFile, full = false, onVersion?: () => void): Promise<number> {
 		const checkpoint = full ? undefined : this.cache.checkpoints[file.path];
 		const result = await this.client.listVersions(file.path, checkpoint?.newestUid);
 		if (result.versions.length === 0) return 0;
@@ -48,6 +49,8 @@ export class HistoryIndexer {
 			this.cache.transitions[id] = makeTransition(id, file.path, version.ts, calculateMetrics(previous, current));
 			previous = current;
 			processed++;
+			onVersion?.();
+			await new Promise<void>(resolve => window.setTimeout(resolve, 0));
 		}
 
 		if (!this.cancelled) {
@@ -83,14 +86,28 @@ export class HistoryIndexer {
 		let nextIndex = 0;
 		let completedFiles = 0;
 		let versions = 0;
+		const activePaths = new Set<string>();
+		const emit = (fileCompleted: boolean) => onProgress({
+			completedFiles,
+			totalFiles: files.length,
+			versions,
+			activePaths: Array.from(activePaths),
+			fileCompleted,
+		});
 		const worker = async () => {
 			while (!this.cancelled) {
 				const index = nextIndex++;
 				const file = files[index];
 				if (!file) return;
-				versions += await this.indexFile(file);
+				activePaths.add(file.path);
+				emit(false);
+				await this.indexFile(file, false, () => {
+					versions++;
+					emit(false);
+				});
+				activePaths.delete(file.path);
 				completedFiles++;
-				onProgress({ completedFiles, totalFiles: files.length, versions, currentPath: file.path });
+				emit(true);
 			}
 		};
 		await Promise.all(Array.from({ length: Math.max(1, concurrency) }, () => worker()));

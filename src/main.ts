@@ -35,6 +35,7 @@ export default class EditHistoryPlugin extends Plugin {
 	private cancelRequested = false;
 	private restartScanRequested = false;
 	private dateRolloverTimer: number | null = null;
+	private progressRefreshTimer: number | null = null;
 	private renderedDate = new Date();
 
 	async onload(): Promise<void> {
@@ -78,6 +79,7 @@ export default class EditHistoryPlugin extends Plugin {
 		if (this.saveTimer !== null) window.clearTimeout(this.saveTimer);
 		if (this.statusClearTimer !== null) window.clearTimeout(this.statusClearTimer);
 		if (this.dateRolloverTimer !== null) window.clearTimeout(this.dateRolloverTimer);
+		if (this.progressRefreshTimer !== null) window.clearTimeout(this.progressRefreshTimer);
 		removeHeatmapOverlays();
 		closeScopePicker(false);
 	}
@@ -174,8 +176,12 @@ export default class EditHistoryPlugin extends Plugin {
 		}
 		try {
 			const versions = await this.indexer.indexFiles(files, 2, progress => {
-				this.setStatus(`${progress.completedFiles}/${progress.totalFiles} files · ${progress.versions} versions · ${progress.currentPath}`);
-				if (progress.completedFiles % 100 === 0) void this.saveState();
+				const active = progress.activePaths.length > 0
+					? ` · Scanning ${progress.activePaths[0]}${progress.activePaths.length > 1 ? ` +${progress.activePaths.length - 1} more` : ''}`
+					: '';
+				this.setStatus(`${progress.completedFiles}/${progress.totalFiles} files · ${progress.versions} versions${active}`);
+				if (progress.fileCompleted) this.scheduleProgressRefresh();
+				if (progress.fileCompleted && progress.completedFiles > 0 && progress.completedFiles % 100 === 0) void this.saveState();
 			});
 			if (this.cancelRequested) {
 				this.setStatus('History scan paused');
@@ -440,6 +446,14 @@ export default class EditHistoryPlugin extends Plugin {
 			this.statusClearTimer = null;
 			this.setStatus('Ready');
 		}, 5_000);
+	}
+
+	private scheduleProgressRefresh(): void {
+		if (this.progressRefreshTimer !== null) return;
+		this.progressRefreshTimer = window.setTimeout(() => {
+			this.progressRefreshTimer = null;
+			this.refreshViews();
+		}, 250);
 	}
 
 	private scheduleSave(): void {

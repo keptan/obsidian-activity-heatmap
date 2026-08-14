@@ -4,6 +4,8 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
+globalThis.window = globalThis;
+
 const source = await fs.readFile(new URL('../src/metrics.ts', import.meta.url), 'utf8');
 assert.match(source, /diffWordsWithSpace/);
 assert.match(source, /diffLines/);
@@ -23,6 +25,8 @@ assert.ok(counts.lines.added > 0);
 assert.ok(counts.lines.removed > 0);
 assert.ok(counts.characters.added > 0);
 assert.ok(counts.characters.removed > 0);
+const fallbackCounts = calculateMetrics('prefix old words suffix', 'prefix new text suffix', -1);
+assert.deepEqual(fallbackCounts.words, { added: 2, removed: 2 });
 
 const indexerBundle = path.join(tempDir, 'indexer.mjs');
 await build({ entryPoints: [new URL('../src/indexer.ts', import.meta.url).pathname], outfile: indexerBundle, bundle: true, platform: 'node', format: 'esm' });
@@ -49,6 +53,15 @@ file.stat.mtime = 20;
 assert.equal(await indexer.indexFile(file), 1);
 assert.equal(Object.keys(cache.transitions).length, 2);
 assert.deepEqual(cache.transitions['3'].counts.words, { added: 1, removed: 0 });
+
+const progressCache = { schemaVersion: 1, trackingStartedAt: 0, clearedAt: 0, transitions: {}, checkpoints: {} };
+const progressIndexer = new HistoryIndexer(client, progressCache);
+const progress = [];
+await progressIndexer.indexFiles([{ ...file, path: 'One.md' }, { ...file, path: 'Two.md' }], 2, update => progress.push(update));
+assert.ok(progress.some(update => update.activePaths.length === 2));
+assert.equal(progress.at(-1).completedFiles, 2);
+assert.equal(progress.at(-1).versions, 2);
+assert.ok(progress.every((update, index) => index === 0 || update.versions >= progress[index - 1].versions));
 await fs.rm(tempDir, { recursive: true });
 
 const styles = await fs.readFile(new URL('../styles.css', import.meta.url), 'utf8');
