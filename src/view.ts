@@ -26,14 +26,18 @@ export class EditHistoryView extends ItemView {
 		const root = this.contentEl;
 		root.empty();
 		root.addClass('edit-history-view');
-		const header = root.createDiv({ cls: 'edit-heatmap-header' });
-		header.createEl('h3', { text: 'Edit history' });
+		const header = root.createDiv({ cls: 'edit-heatmap-calendar-nav' });
+		const title = header.createEl('h3', { cls: 'edit-heatmap-calendar-title' });
+		title.createSpan({ cls: 'edit-heatmap-calendar-month', text: new Date(this.year, this.month, 1).toLocaleDateString(undefined, { month: 'short' }) });
+		title.createSpan({ cls: 'edit-heatmap-calendar-year', text: ` ${this.year}` });
+		title.addEventListener('click', () => { this.goToToday(); this.render(); });
 		const actions = header.createDiv({ cls: 'edit-heatmap-actions' });
 		const previous = makeIconButton(actions, 'chevron-left', 'Previous month');
-		actions.createSpan({ cls: 'edit-heatmap-date-label', text: new Date(this.year, this.month, 1).toLocaleDateString(undefined, { month: 'short', year: 'numeric' }) });
+		const todayButton = actions.createEl('button', { cls: 'edit-heatmap-today-button', text: 'Today' });
 		const next = makeIconButton(actions, 'chevron-right', 'Next month');
 		const settings = makeIconButton(actions, 'settings', 'Heatmap settings');
 		previous.addEventListener('click', () => { this.shiftMonth(-1); this.render(); });
+		todayButton.addEventListener('click', () => { this.goToToday(); this.render(); });
 		next.addEventListener('click', () => {
 			const now = new Date();
 			if (this.year < now.getFullYear() || (this.year === now.getFullYear() && this.month < now.getMonth())) {
@@ -44,8 +48,7 @@ export class EditHistoryView extends ItemView {
 		settings.addEventListener('click', () => { this.controlsVisible = !this.controlsVisible; this.render(); });
 
 		if (this.controlsVisible) this.renderControls(root);
-		const status = root.createDiv({ cls: 'edit-heatmap-status' });
-		status.setText(this.plugin.statusText);
+		if (this.plugin.statusText !== 'Ready') root.createDiv({ cls: 'edit-heatmap-status', text: this.plugin.statusText });
 		const heatmap = root.createDiv();
 		renderMonthHeatmap(heatmap, this.plugin.cache, this.plugin.settings, this.year, this.month);
 	}
@@ -54,6 +57,12 @@ export class EditHistoryView extends ItemView {
 		this.month += direction;
 		if (this.month < 0) { this.month = 11; this.year--; }
 		if (this.month > 11) { this.month = 0; this.year++; }
+	}
+
+	private goToToday(): void {
+		const today = new Date();
+		this.year = today.getFullYear();
+		this.month = today.getMonth();
 	}
 
 	private renderControls(root: HTMLElement): void {

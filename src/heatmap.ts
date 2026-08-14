@@ -108,7 +108,11 @@ export function renderYearHeatmap(container: HTMLElement, cache: EditHistoryCach
 	let week = 0;
 	while (cursor <= end && week < 54) {
 		const previous = new Date(cursor.getTime() - 7 * 86400000);
-		monthRow.createSpan({ text: week === 0 || cursor.getMonth() !== previous.getMonth() ? cursor.toLocaleDateString(undefined, { month: 'short' }) : '' });
+		const crossedMonth = week === 0 || cursor.getMonth() !== previous.getMonth();
+		const monthLabel = week === 0 && cursor.getMonth() === 11
+			? ''
+			: crossedMonth ? cursor.toLocaleDateString(undefined, { month: 'short' }) : '';
+		monthRow.createSpan({ cls: 'edit-heatmap-month-label', text: monthLabel });
 		const column = grid.createDiv({ cls: 'edit-heatmap-week' });
 		for (let offset = 0; offset < 7; offset++) {
 			const date = new Date(cursor);
@@ -141,17 +145,21 @@ export function renderMonthHeatmap(
 	const monthPrefix = `${year}-${String(month + 1).padStart(2, '0')}-`;
 	const max = maxForRange(days, settings, day => day.startsWith(monthPrefix));
 	const header = container.createDiv({ cls: 'edit-heatmap-month-header' });
-	for (const label of ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']) header.createDiv({ text: label });
+	for (const label of ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']) header.createDiv({ cls: 'edit-heatmap-month-weekday', text: label });
 	const grid = container.createDiv({ cls: 'edit-heatmap-month-grid' });
 	const first = new Date(year, month, 1);
-	const last = new Date(year, month + 1, 0);
-	for (let offset = 0; offset < first.getDay(); offset++) grid.createDiv({ cls: 'edit-heatmap-cell edit-heatmap-month-cell is-outside' });
-	for (let day = 1; day <= last.getDate(); day++) {
-		const date = new Date(year, month, day);
+	const cursor = new Date(first);
+	cursor.setDate(cursor.getDate() - cursor.getDay());
+	const today = localDay(new Date());
+	for (let index = 0; index < 42; index++) {
+		const date = new Date(cursor);
+		date.setDate(cursor.getDate() + index);
 		const key = localDay(date);
 		const data = days.get(key) ?? { files: [], added: 0, removed: 0 };
-		const cell = grid.createDiv({ cls: 'edit-heatmap-cell edit-heatmap-month-cell' });
-		cell.createSpan({ cls: 'edit-heatmap-month-day-number', text: String(day) });
+		const cell = grid.createDiv({ cls: 'edit-heatmap-cell edit-heatmap-calendar-day' });
+		if (date.getMonth() !== month) cell.addClass('is-adjacent-month');
+		if (key === today) cell.addClass('is-today');
+		cell.createSpan({ cls: 'edit-heatmap-month-day-number', text: String(date.getDate()) });
 		setupCell(cell, key, data, settings, max);
 	}
 	attachDragSelection(container, settings.metric);
