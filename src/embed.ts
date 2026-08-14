@@ -31,11 +31,12 @@ export class EmbeddedHeatmap extends MarkdownRenderChild {
 			cls: 'edit-heatmap-period-total',
 			text: `${new Intl.NumberFormat().format(wordActivityForPeriod(this.plugin.cache, this.year, this.mode === 'month' ? this.month : undefined))} words edited`,
 		});
-		const actions = header.createDiv({ cls: 'edit-heatmap-actions' });
+		const controls = header.createDiv({ cls: 'edit-heatmap-embed-controls' });
+		const actions = controls.createDiv({ cls: 'edit-heatmap-actions' });
 		const previous = makeIconButton(actions, 'chevron-left', this.mode === 'year' ? 'Previous year' : 'Previous month');
 		const label = actions.createSpan({ cls: 'edit-heatmap-date-label' });
 		const next = makeIconButton(actions, 'chevron-right', this.mode === 'year' ? 'Next year' : 'Next month');
-		const toggles = header.createDiv({ cls: 'edit-heatmap-actions' });
+		const toggles = controls.createDiv({ cls: 'edit-heatmap-actions' });
 		const yearButton = makeIconButton(toggles, 'calendar-range', 'Year view');
 		const monthButton = makeIconButton(toggles, 'calendar-days', 'Month view');
 		yearButton.toggleClass('is-active', this.mode === 'year');
