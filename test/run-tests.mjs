@@ -12,8 +12,10 @@ assert.match(source, /diffLines/);
 assert.match(source, /diffChars/);
 
 const cacheSource = await fs.readFile(new URL('../src/cache.ts', import.meta.url), 'utf8');
+const pathLabelSource = await fs.readFile(new URL('../src/path-label.ts', import.meta.url), 'utf8');
 await transform(source, { loader: 'ts', format: 'esm' });
 await transform(cacheSource, { loader: 'ts', format: 'esm' });
+await transform(pathLabelSource, { loader: 'ts', format: 'esm' });
 
 const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'edit-history-test-'));
 const bundle = path.join(tempDir, 'metrics.mjs');
@@ -25,6 +27,19 @@ assert.ok(counts.lines.added > 0);
 assert.ok(counts.lines.removed > 0);
 assert.ok(counts.characters.added > 0);
 assert.ok(counts.characters.removed > 0);
+
+const pathLabelBundle = path.join(tempDir, 'path-label.mjs');
+await build({ entryPoints: [new URL('../src/path-label.ts', import.meta.url).pathname], outfile: pathLabelBundle, bundle: true, platform: 'node', format: 'esm' });
+const { shortestUniquePathLabels } = await import(pathLabelBundle);
+assert.deepEqual(Object.fromEntries(shortestUniquePathLabels([
+	'Writing/Drafts/Scene.md',
+	'Archive/Scene.md',
+	'Notes/Ideas.md',
+])), {
+	'Writing/Drafts/Scene.md': 'Drafts/Scene.md',
+	'Archive/Scene.md': 'Archive/Scene.md',
+	'Notes/Ideas.md': 'Ideas.md',
+});
 
 const indexerBundle = path.join(tempDir, 'indexer.mjs');
 await build({ entryPoints: [new URL('../src/indexer.ts', import.meta.url).pathname], outfile: indexerBundle, bundle: true, platform: 'node', format: 'esm' });

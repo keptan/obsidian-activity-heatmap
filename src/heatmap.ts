@@ -1,5 +1,6 @@
 import { setIcon } from 'obsidian';
 import { aggregateByDay, type FileDayAggregate } from './cache';
+import { shortestUniquePathLabels } from './path-label';
 import type { EditHistoryCache, EditHistorySettings, HeatmapTheme, Metric } from './types';
 
 interface DayData {
@@ -90,9 +91,10 @@ function tooltipContent(day: string, data: DayData, metric: Metric): DocumentFra
 		const bc = b.counts[metric];
 		return bc.added + bc.removed - ac.added - ac.removed;
 	});
+	const labels = shortestUniquePathLabels(sorted.map(file => file.path));
 	for (const file of sorted.slice(0, 8)) {
 		const row = root.createDiv({ cls: 'edit-heatmap-tooltip-file' });
-		row.createSpan({ cls: 'edit-heatmap-tooltip-path', text: file.path });
+		row.createSpan({ cls: 'edit-heatmap-tooltip-path', text: labels.get(file.path) ?? file.path });
 		row.createSpan({ cls: 'edit-heatmap-added', text: `+${formatNumber(file.counts[metric].added)}` });
 		row.createSpan({ cls: 'edit-heatmap-removed', text: `−${formatNumber(file.counts[metric].removed)}` });
 	}
@@ -306,9 +308,10 @@ function renderSelectionStats(
 	stats.createDiv({ cls: 'edit-heatmap-selection-title', text: `${formattedAverage} words added/day · +${formatNumber(added)} −${formatNumber(removed)} ${metric}` });
 	const files = Array.from(fileTotals, ([path, counts]) => ({ path, ...counts }))
 		.sort((a, b) => b.added + b.removed - a.added - a.removed);
+	const labels = shortestUniquePathLabels(files.map(file => file.path));
 	for (const file of files.slice(0, 20)) {
 		const row = stats.createDiv({ cls: 'edit-heatmap-tooltip-file' });
-		row.createSpan({ cls: 'edit-heatmap-tooltip-path', text: file.path });
+		row.createSpan({ cls: 'edit-heatmap-tooltip-path', text: labels.get(file.path) ?? file.path });
 		row.createSpan({ cls: 'edit-heatmap-added', text: `+${formatNumber(file.added)}` });
 		row.createSpan({ cls: 'edit-heatmap-removed', text: `−${formatNumber(file.removed)}` });
 	}
