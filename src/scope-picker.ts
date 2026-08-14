@@ -39,10 +39,12 @@ export function openScopePicker(anchor: HTMLElement, plugin: EditHistoryPlugin):
 			queryButton.createDiv({ cls: 'edit-heatmap-scope-option-description', text: 'Supports path:, file:, tag:, [property:value], text, and -exclusions' });
 			queryButton.addEventListener('click', () => choose({ type: 'query', value: query }));
 		}
-		const folders = plugin.getScanFolders().filter(folder => folder.toLowerCase().includes(query.toLowerCase()));
+		const folders = plugin.getScanFolders().filter(folder => folder.path.toLowerCase().includes(query.toLowerCase()));
 		for (const folder of folders.slice(0, 100)) {
-			const button = results.createEl('button', { cls: 'edit-heatmap-scope-option', text: folder });
-			button.addEventListener('click', () => choose({ type: 'folder', value: folder }));
+			const button = results.createEl('button', { cls: 'edit-heatmap-scope-option' });
+			button.createDiv({ cls: 'edit-heatmap-scope-option-title', text: folder.path });
+			button.createDiv({ cls: 'edit-heatmap-scope-option-description', text: `${folder.fileCount} .md ${folder.fileCount === 1 ? 'file' : 'files'}` });
+			button.addEventListener('click', () => choose({ type: 'folder', value: folder.path }));
 		}
 		if (!query && folders.length === 0) results.createDiv({ cls: 'edit-heatmap-scope-empty', text: 'No folders found' });
 	};

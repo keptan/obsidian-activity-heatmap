@@ -129,11 +129,20 @@ export default class EditHistoryPlugin extends Plugin {
 		}
 	}
 
-	getScanFolders(): string[] {
+	getScanFolders(): Array<{ path: string; fileCount: number }> {
+		const counts = new Map<string, number>();
+		for (const file of this.app.vault.getMarkdownFiles()) {
+			const parts = file.path.split('/');
+			parts.pop();
+			for (let depth = 1; depth <= parts.length; depth++) {
+				const folder = parts.slice(0, depth).join('/');
+				counts.set(folder, (counts.get(folder) ?? 0) + 1);
+			}
+		}
 		return this.app.vault.getAllFolders()
-			.map(folder => folder.path)
-			.filter(path => path.length > 0)
-			.sort((a, b) => a.localeCompare(b));
+			.map(folder => ({ path: folder.path, fileCount: counts.get(folder.path) ?? 0 }))
+			.filter(folder => folder.path.length > 0)
+			.sort((a, b) => b.fileCount - a.fileCount || a.path.localeCompare(b.path));
 	}
 
 	getFilesInScanScope(): TFile[] {
