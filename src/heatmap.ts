@@ -71,11 +71,31 @@ function tooltipContent(day: string, data: DayData, metric: Metric): DocumentFra
 	return fragment;
 }
 
-export function renderHeatmap(container: HTMLElement, cache: EditHistoryCache, settings: EditHistorySettings, year: number): void {
+function setupCell(cell: HTMLElement, key: string, data: DayData, settings: EditHistorySettings, max: number): void {
+	cell.dataset.day = key;
+	cell.dataset.added = String(data.added);
+	cell.dataset.removed = String(data.removed);
+	cell.dataset.files = JSON.stringify(data.files.map(file => ({
+		path: file.path,
+		added: file.counts[settings.metric].added,
+		removed: file.counts[settings.metric].removed,
+	}) satisfies SelectionFileData));
+	if (data.added + data.removed > 0) setCellStyle(cell, data, settings.theme, max, settings.activityColor);
+	cell.addEventListener('mouseenter', event => showTooltip(event.currentTarget as HTMLElement, tooltipContent(key, data, settings.metric)));
+	cell.addEventListener('mouseleave', hideTooltip);
+}
+
+function maxForRange(days: Map<string, DayData>, settings: EditHistorySettings, inRange: (day: string) => boolean): number {
+	const ranged = new Map(Array.from(days).filter(([day]) => inRange(day)));
+	return percentileMax(ranged, day => settings.theme === 'activity' ? day.added + day.removed : Math.max(day.added, day.removed));
+}
+
+export function renderYearHeatmap(container: HTMLElement, cache: EditHistoryCache, settings: EditHistorySettings, year: number): void {
 	container.empty();
 	container.addClass('edit-heatmap');
 	const days = buildDays(cache, settings.metric);
-	const max = percentileMax(days, day => settings.theme === 'activity' ? day.added + day.removed : Math.max(day.added, day.removed));
+	const yearPrefix = `${year}-`;
+	const max = maxForRange(days, settings, day => day.startsWith(yearPrefix));
 	const wrapper = container.createDiv({ cls: 'edit-heatmap-grid-wrapper' });
 	const labels = wrapper.createDiv({ cls: 'edit-heatmap-day-labels' });
 	for (const label of ['', 'Mon', '', 'Wed', '', 'Fri', '']) labels.createDiv({ text: label });
@@ -100,20 +120,39 @@ export function renderHeatmap(container: HTMLElement, cache: EditHistoryCache, s
 				continue;
 			}
 			const data = days.get(key) ?? { files: [], added: 0, removed: 0 };
-			cell.dataset.day = key;
-			cell.dataset.added = String(data.added);
-			cell.dataset.removed = String(data.removed);
-			cell.dataset.files = JSON.stringify(data.files.map(file => ({
-				path: file.path,
-				added: file.counts[settings.metric].added,
-				removed: file.counts[settings.metric].removed,
-			}) satisfies SelectionFileData));
-			if (data.added + data.removed > 0) setCellStyle(cell, data, settings.theme, max, settings.activityColor);
-			cell.addEventListener('mouseenter', event => showTooltip(event.currentTarget as HTMLElement, tooltipContent(key, data, settings.metric)));
-			cell.addEventListener('mouseleave', hideTooltip);
+			setupCell(cell, key, data, settings, max);
 		}
 		cursor.setDate(cursor.getDate() + 7);
 		week++;
+	}
+	attachDragSelection(container, settings.metric);
+}
+
+export function renderMonthHeatmap(
+	container: HTMLElement,
+	cache: EditHistoryCache,
+	settings: EditHistorySettings,
+	year: number,
+	month: number,
+): void {
+	container.empty();
+	container.addClass('edit-heatmap', 'edit-heatmap-month-view');
+	const days = buildDays(cache, settings.metric);
+	const monthPrefix = `${year}-${String(month + 1).padStart(2, '0')}-`;
+	const max = maxForRange(days, settings, day => day.startsWith(monthPrefix));
+	const header = container.createDiv({ cls: 'edit-heatmap-month-header' });
+	for (const label of ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']) header.createDiv({ text: label });
+	const grid = container.createDiv({ cls: 'edit-heatmap-month-grid' });
+	const first = new Date(year, month, 1);
+	const last = new Date(year, month + 1, 0);
+	for (let offset = 0; offset < first.getDay(); offset++) grid.createDiv({ cls: 'edit-heatmap-cell edit-heatmap-month-cell is-outside' });
+	for (let day = 1; day <= last.getDate(); day++) {
+		const date = new Date(year, month, day);
+		const key = localDay(date);
+		const data = days.get(key) ?? { files: [], added: 0, removed: 0 };
+		const cell = grid.createDiv({ cls: 'edit-heatmap-cell edit-heatmap-month-cell' });
+		cell.createSpan({ cls: 'edit-heatmap-month-day-number', text: String(day) });
+		setupCell(cell, key, data, settings, max);
 	}
 	attachDragSelection(container, settings.metric);
 }

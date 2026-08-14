@@ -1,12 +1,13 @@
 import { ItemView, Notice, Setting, type WorkspaceLeaf } from 'obsidian';
 import type EditHistoryPlugin from './main';
-import { makeIconButton, renderHeatmap } from './heatmap';
+import { makeIconButton, renderMonthHeatmap } from './heatmap';
 import { ConfirmClearCacheModal } from './confirm-clear-modal';
 
 export const VIEW_TYPE = 'edit-history-heatmap-view';
 
 export class EditHistoryView extends ItemView {
 	private year = new Date().getFullYear();
+	private month = new Date().getMonth();
 	private controlsVisible = false;
 
 	constructor(leaf: WorkspaceLeaf, private plugin: EditHistoryPlugin) {
@@ -28,19 +29,31 @@ export class EditHistoryView extends ItemView {
 		const header = root.createDiv({ cls: 'edit-heatmap-header' });
 		header.createEl('h3', { text: 'Edit history' });
 		const actions = header.createDiv({ cls: 'edit-heatmap-actions' });
-		const previous = makeIconButton(actions, 'chevron-left', 'Previous year');
-		actions.createSpan({ cls: 'edit-heatmap-year', text: String(this.year) });
-		const next = makeIconButton(actions, 'chevron-right', 'Next year');
+		const previous = makeIconButton(actions, 'chevron-left', 'Previous month');
+		actions.createSpan({ cls: 'edit-heatmap-date-label', text: new Date(this.year, this.month, 1).toLocaleDateString(undefined, { month: 'short', year: 'numeric' }) });
+		const next = makeIconButton(actions, 'chevron-right', 'Next month');
 		const settings = makeIconButton(actions, 'settings', 'Heatmap settings');
-		previous.addEventListener('click', () => { this.year--; this.render(); });
-		next.addEventListener('click', () => { if (this.year < new Date().getFullYear()) { this.year++; this.render(); } });
+		previous.addEventListener('click', () => { this.shiftMonth(-1); this.render(); });
+		next.addEventListener('click', () => {
+			const now = new Date();
+			if (this.year < now.getFullYear() || (this.year === now.getFullYear() && this.month < now.getMonth())) {
+				this.shiftMonth(1);
+				this.render();
+			}
+		});
 		settings.addEventListener('click', () => { this.controlsVisible = !this.controlsVisible; this.render(); });
 
 		if (this.controlsVisible) this.renderControls(root);
 		const status = root.createDiv({ cls: 'edit-heatmap-status' });
 		status.setText(this.plugin.statusText);
 		const heatmap = root.createDiv();
-		renderHeatmap(heatmap, this.plugin.cache, this.plugin.settings, this.year);
+		renderMonthHeatmap(heatmap, this.plugin.cache, this.plugin.settings, this.year, this.month);
+	}
+
+	private shiftMonth(direction: -1 | 1): void {
+		this.month += direction;
+		if (this.month < 0) { this.month = 11; this.year--; }
+		if (this.month > 11) { this.month = 0; this.year++; }
 	}
 
 	private renderControls(root: HTMLElement): void {

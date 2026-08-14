@@ -18,3 +18,12 @@ This plugin is in early development. It uses private Obsidian Sync APIs, which m
 ## Usage
 
 Open **Edit history heatmap: Open heatmap**, then select **Import history** for the initial historical scan. Later updates are discovered from vault events and lightweight file metadata reconciliation.
+
+The sidebar uses a month calendar. To embed a heatmap with year/month controls in a note, add:
+
+````markdown
+```edit-history-heatmap
+```
+````
+
+Use `month` inside the code block to make the embedded view start in month mode.

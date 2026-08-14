@@ -6,6 +6,7 @@ import { SyncHistoryClient } from './sync-history';
 import { DEFAULT_SETTINGS, type EditHistoryCache, type EditHistorySettings } from './types';
 import { EditHistoryView, VIEW_TYPE } from './view';
 import { removeHeatmapOverlays } from './heatmap';
+import { EmbeddedHeatmap } from './embed';
 
 interface StoredState {
 	settings?: Partial<EditHistorySettings>;
@@ -21,6 +22,7 @@ export default class EditHistoryPlugin extends Plugin {
 	private indexer: HistoryIndexer | null = null;
 	private editTimers = new Map<string, number>();
 	private saveTimer: number | null = null;
+	private embeddedViews = new Set<EmbeddedHeatmap>();
 
 	async onload(): Promise<void> {
 		await this.loadState();
@@ -30,6 +32,9 @@ export default class EditHistoryPlugin extends Plugin {
 		this.addCommand({ id: 'open-heatmap', name: 'Open heatmap', callback: () => void this.activateView() });
 		this.addCommand({ id: 'import-sync-history', name: 'Import sync history', callback: () => void this.importAllHistory() });
 		this.addSettingTab(new EditHistorySettingTab(this.app, this));
+		this.registerMarkdownCodeBlockProcessor('edit-history-heatmap', (source, element, context) => {
+			context.addChild(new EmbeddedHeatmap(element, this, source));
+		});
 
 		this.registerEvent(this.app.vault.on('modify', file => {
 			if (file instanceof TFile && file.extension === 'md') this.scheduleFileIndex(file);
@@ -69,7 +74,11 @@ export default class EditHistoryPlugin extends Plugin {
 			const view = leaf.view;
 			if (view instanceof EditHistoryView) view.render();
 		}
+		for (const view of this.embeddedViews) view.render();
 	}
+
+	registerEmbeddedView(view: EmbeddedHeatmap): void { this.embeddedViews.add(view); }
+	unregisterEmbeddedView(view: EmbeddedHeatmap): void { this.embeddedViews.delete(view); }
 
 	async importAllHistory(): Promise<void> {
 		if (this.isImporting) return;
