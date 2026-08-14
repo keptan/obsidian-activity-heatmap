@@ -5,6 +5,7 @@ import { EditHistorySettingTab } from './settings';
 import { SyncHistoryClient } from './sync-history';
 import { DEFAULT_SETTINGS, type EditHistoryCache, type EditHistorySettings } from './types';
 import { EditHistoryView, VIEW_TYPE } from './view';
+import { removeHeatmapOverlays } from './heatmap';
 
 interface StoredState {
 	settings?: Partial<EditHistorySettings>;
@@ -51,6 +52,7 @@ export default class EditHistoryPlugin extends Plugin {
 	onunload(): void {
 		for (const timer of this.editTimers.values()) window.clearTimeout(timer);
 		if (this.saveTimer !== null) window.clearTimeout(this.saveTimer);
+		removeHeatmapOverlays();
 	}
 
 	async activateView(): Promise<void> {

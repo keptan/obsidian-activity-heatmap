@@ -108,6 +108,7 @@ export function renderHeatmap(container: HTMLElement, cache: EditHistoryCache, s
 }
 
 let tooltip: HTMLElement | null = null;
+let activeSelectionCleanup: (() => void) | null = null;
 function showTooltip(target: HTMLElement, content: DocumentFragment): void {
 	if (!tooltip) tooltip = document.body.createDiv({ cls: 'edit-heatmap-tooltip' });
 	tooltip.replaceChildren(content);
@@ -128,6 +129,7 @@ function attachDragSelection(container: HTMLElement, metric: Metric): void {
 		const target = (event.target as HTMLElement).closest<HTMLElement>('[data-day]');
 		if (!target) return;
 		event.preventDefault();
+		activeSelectionCleanup?.();
 		hideTooltip();
 		const startX = event.clientX;
 		const startY = event.clientY;
@@ -150,12 +152,21 @@ function attachDragSelection(container: HTMLElement, metric: Metric): void {
 			box.remove();
 			window.removeEventListener('pointermove', move);
 			window.removeEventListener('pointerup', finish);
+			activeSelectionCleanup = null;
 		};
 		const move = (moveEvent: PointerEvent) => update(moveEvent.clientX, moveEvent.clientY);
 		window.addEventListener('pointermove', move);
 		window.addEventListener('pointerup', finish);
+		activeSelectionCleanup = finish;
 		update(startX, startY);
 	});
+}
+
+export function removeHeatmapOverlays(): void {
+	activeSelectionCleanup?.();
+	activeSelectionCleanup = null;
+	tooltip?.remove();
+	tooltip = null;
 }
 
 export function makeIconButton(parent: HTMLElement, icon: string, label: string): HTMLButtonElement {
