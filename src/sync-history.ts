@@ -31,7 +31,7 @@ interface AppWithSync extends App {
 export class SyncHistoryClient {
 	private requestQueue: Promise<void> = Promise.resolve();
 	private lastRequestAt = 0;
-	private readonly minimumRequestIntervalMs = 125;
+	private readonly minimumRequestIntervalMs = 75;
 
 	constructor(private app: App) {}
 
@@ -79,7 +79,7 @@ export class SyncHistoryClient {
 		this.lastRequestAt = Date.now();
 		release();
 
-		let delay = 500;
+		let delay = 250;
 		for (let attempt = 0; attempt < 4; attempt++) {
 			try {
 				return await operation();
