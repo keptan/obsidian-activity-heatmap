@@ -72,7 +72,7 @@ export default class EditHistoryPlugin extends Plugin {
 	refreshViews(): void {
 		for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
 			const view = leaf.view;
-			if (view instanceof EditHistoryView) view.render();
+			if (view instanceof EditHistoryView) view.refreshFromPlugin();
 		}
 		for (const view of this.embeddedViews) view.render();
 	}

@@ -129,6 +129,10 @@
 	white-space: nowrap;
 }
 
+.edit-heatmap-status.is-hidden {
+	display: none;
+}
+
 .edit-heatmap-grid-wrapper {
 	display: flex;
 	gap: 3px;

@@ -22,6 +22,18 @@ export class EditHistoryView extends ItemView {
 		this.render();
 	}
 
+	refreshFromPlugin(): void {
+		if (!this.controlsVisible) {
+			this.render();
+			return;
+		}
+		const status = this.contentEl.querySelector<HTMLElement>('.edit-heatmap-status');
+		status?.setText(this.plugin.statusText);
+		status?.toggleClass('is-hidden', this.plugin.statusText === 'Ready');
+		const total = this.contentEl.querySelector<HTMLElement>('.edit-heatmap-period-total');
+		total?.setText(`${new Intl.NumberFormat().format(wordActivityForPeriod(this.plugin.cache, this.year, this.month))} words edited`);
+	}
+
 	render(): void {
 		const root = this.contentEl;
 		root.empty();
@@ -53,7 +65,8 @@ export class EditHistoryView extends ItemView {
 		settings.addEventListener('click', () => { this.controlsVisible = !this.controlsVisible; this.render(); });
 
 		if (this.controlsVisible) this.renderControls(root);
-		if (this.plugin.statusText !== 'Ready') root.createDiv({ cls: 'edit-heatmap-status', text: this.plugin.statusText });
+		const status = root.createDiv({ cls: 'edit-heatmap-status', text: this.plugin.statusText });
+		status.toggleClass('is-hidden', this.plugin.statusText === 'Ready');
 		const heatmap = root.createDiv();
 		renderMonthHeatmap(heatmap, this.plugin.cache, this.plugin.settings, this.year, this.month);
 	}
