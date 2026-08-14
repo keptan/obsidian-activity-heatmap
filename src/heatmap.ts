@@ -69,7 +69,7 @@ function tooltipContent(day: string, data: DayData, metric: Metric): DocumentFra
 	const fragment = createFragment();
 	const root = fragment.createDiv({ cls: 'edit-heatmap-tooltip-content' });
 	root.createDiv({ cls: 'edit-heatmap-tooltip-title', text: new Date(`${day}T12:00:00`).toLocaleDateString(undefined, { dateStyle: 'medium' }) });
-	root.createDiv({ cls: 'edit-heatmap-tooltip-total', text: `${formatNumber(data.added + data.removed)} ${metric} edited` });
+	root.createDiv({ cls: 'edit-heatmap-tooltip-total', text: `${formatNumber(data.added)} ${metric} edited` });
 	const sorted = [...data.files].sort((a, b) => {
 		const ac = a.counts[metric];
 		const bc = b.counts[metric];
