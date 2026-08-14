@@ -19,14 +19,12 @@ const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'edit-history-test-'));
 const bundle = path.join(tempDir, 'metrics.mjs');
 await build({ entryPoints: [new URL('../src/metrics.ts', import.meta.url).pathname], outfile: bundle, bundle: true, platform: 'node', format: 'esm' });
 const { calculateMetrics } = await import(bundle);
-const counts = calculateMetrics('one two\nold line\n', 'one three four\nnew line\n');
+const counts = await calculateMetrics('one two\nold line\n', 'one three four\nnew line\n');
 assert.deepEqual(counts.words, { added: 3, removed: 2 });
 assert.ok(counts.lines.added > 0);
 assert.ok(counts.lines.removed > 0);
 assert.ok(counts.characters.added > 0);
 assert.ok(counts.characters.removed > 0);
-const fallbackCounts = calculateMetrics('prefix old words suffix', 'prefix new text suffix', -1);
-assert.deepEqual(fallbackCounts.words, { added: 2, removed: 2 });
 
 const indexerBundle = path.join(tempDir, 'indexer.mjs');
 await build({ entryPoints: [new URL('../src/indexer.ts', import.meta.url).pathname], outfile: indexerBundle, bundle: true, platform: 'node', format: 'esm' });

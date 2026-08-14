@@ -46,11 +46,10 @@ export class HistoryIndexer {
 			const current = contents.get(version.uid);
 			if (current === undefined) continue;
 			const id = transitionId(version.uid);
-			this.cache.transitions[id] = makeTransition(id, file.path, version.ts, calculateMetrics(previous, current));
+			this.cache.transitions[id] = makeTransition(id, file.path, version.ts, await calculateMetrics(previous, current));
 			previous = current;
 			processed++;
 			onVersion?.();
-			await new Promise<void>(resolve => window.setTimeout(resolve, 0));
 		}
 
 		if (!this.cancelled) {
