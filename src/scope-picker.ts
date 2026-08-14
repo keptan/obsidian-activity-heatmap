@@ -28,6 +28,11 @@ export function openScopePicker(anchor: HTMLElement, plugin: EditHistoryPlugin):
 	const render = (filter: string) => {
 		results.empty();
 		const query = filter.trim();
+		if (!query) {
+			const allButton = results.createEl('button', { cls: 'edit-heatmap-scope-option' });
+			allButton.createDiv({ cls: 'edit-heatmap-scope-option-title', text: 'All .md files' });
+			allButton.addEventListener('click', () => choose({ type: 'all', value: '*' }));
+		}
 		if (query) {
 			const queryButton = results.createEl('button', { cls: 'edit-heatmap-scope-option' });
 			queryButton.createDiv({ cls: 'edit-heatmap-scope-option-title', text: `Use query: ${query}` });
@@ -53,6 +58,7 @@ export function openScopePicker(anchor: HTMLElement, plugin: EditHistoryPlugin):
 
 export function scopeLabel(plugin: EditHistoryPlugin): string {
 	if (plugin.settings.scopeType === 'none') return 'Choose scope';
+	if (plugin.settings.scopeType === 'all') return 'All .md files';
 	return plugin.settings.scopeType === 'folder' ? plugin.settings.scopeValue : `Query: ${plugin.settings.scopeValue}`;
 }
 

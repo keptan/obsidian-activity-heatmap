@@ -1,6 +1,6 @@
 export type Metric = 'words' | 'lines' | 'characters';
 export type HeatmapTheme = 'changes' | 'activity';
-export type ScopeType = 'none' | 'folder' | 'query';
+export type ScopeType = 'none' | 'all' | 'folder' | 'query';
 
 export interface ChangeCount {
 	added: number;

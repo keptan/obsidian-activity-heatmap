@@ -46,6 +46,7 @@ async function matchesTerm(app: App, file: TFile, raw: string): Promise<boolean>
 export async function resolveScope(app: App, type: ScopeType, value: string): Promise<TFile[]> {
 	if (type === 'none' || !value.trim()) return [];
 	const files = app.vault.getMarkdownFiles();
+	if (type === 'all') return files;
 	if (type === 'folder') {
 		const prefix = `${value.replace(/\/$/, '')}/`;
 		return files.filter(file => file.path.startsWith(prefix));

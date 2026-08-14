@@ -194,7 +194,9 @@ export default class EditHistoryPlugin extends Plugin {
 	}
 
 	private async refreshScopeAndIndexFile(file: TFile): Promise<void> {
-		if (this.settings.scopeType === 'folder') {
+		if (this.settings.scopeType === 'all') {
+			this.scopePaths.add(file.path);
+		} else if (this.settings.scopeType === 'folder') {
 			const prefix = `${this.settings.scopeValue.replace(/\/$/, '')}/`;
 			if (file.path.startsWith(prefix)) this.scopePaths.add(file.path);
 			else this.scopePaths.delete(file.path);
