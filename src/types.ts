@@ -1,5 +1,6 @@
 export type Metric = 'words' | 'lines' | 'characters';
 export type HeatmapTheme = 'changes' | 'activity';
+export type ScopeType = 'none' | 'folder' | 'query';
 
 export interface ChangeCount {
 	added: number;
@@ -39,7 +40,8 @@ export interface EditHistorySettings {
 	metric: Metric;
 	activityColor: string;
 	maxConcurrentFiles: number;
-	scanFolder: string;
+	scopeType: ScopeType;
+	scopeValue: string;
 }
 
 export const DEFAULT_SETTINGS: EditHistorySettings = {
@@ -47,7 +49,8 @@ export const DEFAULT_SETTINGS: EditHistorySettings = {
 	metric: 'lines',
 	activityColor: '#7c5cff',
 	maxConcurrentFiles: 2,
-	scanFolder: '',
+	scopeType: 'none',
+	scopeValue: '',
 };
 
 export function emptyCounts(): MetricCounts {

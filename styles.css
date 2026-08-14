@@ -45,6 +45,7 @@
 	margin: 0;
 	font-size: 1.5em;
 	cursor: pointer;
+	white-space: nowrap;
 }
 
 .edit-heatmap-calendar-heading {
@@ -89,6 +90,74 @@
 .edit-heatmap-icon-button.is-active {
 	background: var(--background-modifier-hover);
 	color: var(--interactive-accent);
+}
+
+.edit-heatmap-scope-button {
+	max-width: 180px;
+	height: 24px;
+	padding: 0 8px;
+	overflow: hidden;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	background: transparent;
+	color: var(--text-muted);
+	font-family: var(--font-interface);
+	font-size: 0.8em;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.edit-heatmap-scope-picker {
+	position: fixed;
+	z-index: var(--layer-menu);
+	width: 320px;
+	max-height: min(420px, calc(100vh - 24px));
+	padding: 8px;
+	overflow: hidden;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	background: var(--background-primary);
+	box-shadow: var(--shadow-s);
+}
+
+.edit-heatmap-scope-picker .search-input-container {
+	width: 100%;
+	margin-bottom: 6px;
+}
+
+.edit-heatmap-scope-results {
+	max-height: 340px;
+	overflow-y: auto;
+}
+
+.edit-heatmap-scope-option {
+	display: block;
+	width: 100%;
+	padding: 7px 8px;
+	border: 0;
+	border-radius: var(--radius-s);
+	background: transparent;
+	box-shadow: none;
+	color: var(--text-normal);
+	font-size: var(--font-ui-small);
+	text-align: left;
+}
+
+.edit-heatmap-scope-option:hover {
+	background: var(--background-modifier-hover);
+}
+
+.edit-heatmap-scope-option-title {
+	overflow: hidden;
+	font-weight: 600;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.edit-heatmap-scope-option-description,
+.edit-heatmap-scope-empty {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
 }
 
 .edit-heatmap-embed {
@@ -192,6 +261,18 @@
 
 .edit-history-view .edit-heatmap-month-view {
 	max-width: 420px;
+}
+
+.edit-history-view .edit-heatmap-calendar-title {
+	font-size: 1.2em;
+}
+
+.edit-history-view .edit-heatmap-today-button {
+	display: none;
+}
+
+.edit-history-view .edit-heatmap-scope-button {
+	max-width: 56px;
 }
 
 .edit-heatmap-month-header {

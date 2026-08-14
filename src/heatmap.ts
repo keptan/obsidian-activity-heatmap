@@ -19,9 +19,9 @@ function localDay(date: Date): string {
 	return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
-function buildDays(cache: EditHistoryCache, metric: Metric): Map<string, DayData> {
+function buildDays(cache: EditHistoryCache, metric: Metric, paths?: ReadonlySet<string>): Map<string, DayData> {
 	const result = new Map<string, DayData>();
-	for (const [day, files] of aggregateByDay(cache)) {
+	for (const [day, files] of aggregateByDay(cache, paths)) {
 		result.set(day, {
 			files,
 			added: files.reduce((sum, file) => sum + file.counts[metric].added, 0),
@@ -53,12 +53,12 @@ function formatNumber(value: number): string {
 	return new Intl.NumberFormat().format(value);
 }
 
-export function wordActivityForPeriod(cache: EditHistoryCache, year: number, month?: number): number {
+export function wordActivityForPeriod(cache: EditHistoryCache, year: number, month?: number, paths?: ReadonlySet<string>): number {
 	const prefix = month === undefined
 		? `${year}-`
 		: `${year}-${String(month + 1).padStart(2, '0')}-`;
 	let total = 0;
-	for (const [day, files] of aggregateByDay(cache)) {
+	for (const [day, files] of aggregateByDay(cache, paths)) {
 		if (!day.startsWith(prefix)) continue;
 		for (const file of files) total += file.counts.words.added + file.counts.words.removed;
 	}
@@ -105,10 +105,10 @@ function maxForRange(days: Map<string, DayData>, settings: EditHistorySettings, 
 	return percentileMax(ranged, day => settings.theme === 'activity' ? day.added + day.removed : Math.max(day.added, day.removed));
 }
 
-export function renderYearHeatmap(container: HTMLElement, cache: EditHistoryCache, settings: EditHistorySettings, year: number): void {
+export function renderYearHeatmap(container: HTMLElement, cache: EditHistoryCache, settings: EditHistorySettings, year: number, paths?: ReadonlySet<string>): void {
 	container.empty();
 	container.addClass('edit-heatmap');
-	const days = buildDays(cache, settings.metric);
+	const days = buildDays(cache, settings.metric, paths);
 	const yearPrefix = `${year}-`;
 	const max = maxForRange(days, settings, day => day.startsWith(yearPrefix));
 	const wrapper = container.createDiv({ cls: 'edit-heatmap-grid-wrapper' });
@@ -153,10 +153,11 @@ export function renderMonthHeatmap(
 	settings: EditHistorySettings,
 	year: number,
 	month: number,
+	paths?: ReadonlySet<string>,
 ): void {
 	container.empty();
 	container.addClass('edit-heatmap', 'edit-heatmap-month-view');
-	const days = buildDays(cache, settings.metric);
+	const days = buildDays(cache, settings.metric, paths);
 	const monthPrefix = `${year}-${String(month + 1).padStart(2, '0')}-`;
 	const max = maxForRange(days, settings, day => day.startsWith(monthPrefix));
 	const header = container.createDiv({ cls: 'edit-heatmap-month-header' });

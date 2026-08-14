@@ -7,6 +7,8 @@ import { DEFAULT_SETTINGS, type EditHistoryCache, type EditHistorySettings } fro
 import { EditHistoryView, VIEW_TYPE } from './view';
 import { removeHeatmapOverlays } from './heatmap';
 import { EmbeddedHeatmap } from './embed';
+import { fileMatchesQuery, resolveScope, type ScopeSelection } from './scope';
+import { closeScopePicker } from './scope-picker';
 
 interface StoredState {
 	settings?: Partial<EditHistorySettings>;
@@ -23,10 +25,15 @@ export default class EditHistoryPlugin extends Plugin {
 	private editTimers = new Map<string, number>();
 	private saveTimer: number | null = null;
 	private embeddedViews = new Set<EmbeddedHeatmap>();
+	private scopePaths = new Set<string>();
+	private statusBarEl!: HTMLElement;
+	private statusClearTimer: number | null = null;
 
 	async onload(): Promise<void> {
 		await this.loadState();
 		this.client = new SyncHistoryClient(this.app);
+		this.statusBarEl = this.addStatusBarItem();
+		this.updateStatusBar();
 		this.registerView(VIEW_TYPE, leaf => new EditHistoryView(leaf, this));
 		this.addRibbonIcon('chart-no-axes-column-increasing', 'Open edit history heatmap', () => void this.activateView());
 		this.addCommand({ id: 'open-heatmap', name: 'Open heatmap', callback: () => void this.activateView() });
@@ -45,19 +52,22 @@ export default class EditHistoryPlugin extends Plugin {
 		this.registerEvent(this.app.vault.on('rename', (file, oldPath) => {
 			if (file instanceof TFile && file.extension === 'md') {
 				renameCachedFile(this.cache, oldPath, file.path);
+				this.scopePaths.delete(oldPath);
 				this.scheduleSave();
 				this.scheduleFileIndex(file);
 			}
 		}));
 
-		this.app.workspace.onLayoutReady(() => void this.reconcileChangedFiles());
+		this.app.workspace.onLayoutReady(() => void this.loadSelectedScope());
 		this.registerInterval(window.setInterval(() => void this.reconcileChangedFiles(), 5 * 60 * 1000));
 	}
 
 	onunload(): void {
 		for (const timer of this.editTimers.values()) window.clearTimeout(timer);
 		if (this.saveTimer !== null) window.clearTimeout(this.saveTimer);
+		if (this.statusClearTimer !== null) window.clearTimeout(this.statusClearTimer);
 		removeHeatmapOverlays();
+		closeScopePicker();
 	}
 
 	async activateView(): Promise<void> {
@@ -86,24 +96,36 @@ export default class EditHistoryPlugin extends Plugin {
 			new Notice('Enable Obsidian Sync before importing history.');
 			return;
 		}
+		if (this.settings.scopeType === 'none') {
+			new Notice('Choose a folder or query from a heatmap first.');
+			return;
+		}
 		this.isImporting = true;
-		this.statusText = 'Preparing historical import…';
+		this.setStatus('Preparing historical import…');
 		this.refreshViews();
 		this.indexer = new HistoryIndexer(this.client, this.cache);
-		const files = this.getFilesInScanScope();
+		const files = this.getFilesInScanScope().filter(file => !this.cache.checkpoints[file.path]);
+		if (files.length === 0) {
+			this.isImporting = false;
+			this.indexer = null;
+			this.setStatus('Scope history is up to date');
+			this.refreshViews();
+			this.scheduleStatusClear();
+			return;
+		}
 		try {
 			const versions = await this.indexer.indexFiles(files, this.settings.maxConcurrentFiles, progress => {
-				this.statusText = `${progress.completedFiles}/${progress.totalFiles} files · ${progress.versions} versions · ${progress.currentPath}`;
+				this.setStatus(`${progress.completedFiles}/${progress.totalFiles} files · ${progress.versions} versions · ${progress.currentPath}`);
 				if (progress.completedFiles % 100 === 0) void this.saveState();
-				this.refreshViews();
 			});
-			this.statusText = `Imported ${versions} versions across ${files.length} files`;
+			this.setStatus(`Imported ${versions} versions across ${files.length} files`);
 			new Notice(this.statusText);
 		} finally {
 			this.isImporting = false;
 			this.indexer = null;
 			await this.saveState();
 			this.refreshViews();
+			this.scheduleStatusClear();
 		}
 	}
 
@@ -115,10 +137,31 @@ export default class EditHistoryPlugin extends Plugin {
 	}
 
 	getFilesInScanScope(): TFile[] {
-		const folder = this.settings.scanFolder;
-		if (!folder) return this.app.vault.getMarkdownFiles();
-		const prefix = `${folder}/`;
-		return this.app.vault.getMarkdownFiles().filter(file => file.path.startsWith(prefix));
+		return this.app.vault.getMarkdownFiles().filter(file => this.scopePaths.has(file.path));
+	}
+
+	getScopePaths(): ReadonlySet<string> { return this.scopePaths; }
+
+	async selectScope(scope: ScopeSelection): Promise<void> {
+		this.settings.scopeType = scope.type;
+		this.settings.scopeValue = scope.value;
+		const files = await resolveScope(this.app, scope.type, scope.value);
+		this.scopePaths = new Set(files.map(file => file.path));
+		await this.saveState();
+		this.setStatus(`${files.length} files in scope`);
+		this.refreshViews();
+		void this.importAllHistory().catch(error => console.error('Edit History Heatmap: Scope import failed', error));
+	}
+
+	private async loadSelectedScope(): Promise<void> {
+		if (this.settings.scopeType === 'none') {
+			this.scopePaths.clear();
+			this.refreshViews();
+			return;
+		}
+		const files = await resolveScope(this.app, this.settings.scopeType, this.settings.scopeValue);
+		this.scopePaths = new Set(files.map(file => file.path));
+		this.refreshViews();
 	}
 
 	async clearCache(): Promise<void> {
@@ -128,33 +171,48 @@ export default class EditHistoryPlugin extends Plugin {
 		}
 		this.cache = createCache();
 		this.cache.clearedAt = Date.now();
-		this.statusText = 'Cache cleared';
+		this.setStatus('Cache cleared');
 		await this.saveState();
 		this.refreshViews();
 		new Notice('Edit history cache cleared.');
+		this.scheduleStatusClear();
 	}
 
 	cancelImport(): void {
 		this.indexer?.cancel();
-		this.statusText = 'Cancelling after current requests…';
+		this.setStatus('Cancelling after current requests…');
 	}
 
 	private scheduleFileIndex(file: TFile): void {
+		if (this.settings.scopeType === 'none') return;
 		const existing = this.editTimers.get(file.path);
 		if (existing !== undefined) window.clearTimeout(existing);
 		this.editTimers.set(file.path, window.setTimeout(() => {
 			this.editTimers.delete(file.path);
-			void this.indexFile(file);
+			void this.refreshScopeAndIndexFile(file);
 		}, 15_000));
 	}
 
+	private async refreshScopeAndIndexFile(file: TFile): Promise<void> {
+		if (this.settings.scopeType === 'folder') {
+			const prefix = `${this.settings.scopeValue.replace(/\/$/, '')}/`;
+			if (file.path.startsWith(prefix)) this.scopePaths.add(file.path);
+			else this.scopePaths.delete(file.path);
+		} else if (this.settings.scopeType === 'query') {
+			const matches = await fileMatchesQuery(this.app, file, this.settings.scopeValue);
+			if (matches) this.scopePaths.add(file.path);
+			else this.scopePaths.delete(file.path);
+		}
+		await this.indexFile(file);
+	}
+
 	private async indexFile(file: TFile): Promise<void> {
-		if (this.isImporting || !this.client.isAvailable()) return;
+		if (this.isImporting || !this.client.isAvailable() || !this.scopePaths.has(file.path)) return;
 		try {
 			const indexer = new HistoryIndexer(this.client, this.cache);
 			const versions = await indexer.indexFile(file);
 			if (versions > 0) {
-				this.statusText = `Updated ${file.path}`;
+				this.setStatus(`Updated ${file.path}`);
 				await this.saveState();
 				this.refreshViews();
 			}
@@ -164,8 +222,8 @@ export default class EditHistoryPlugin extends Plugin {
 	}
 
 	private async reconcileChangedFiles(): Promise<void> {
-		if (this.isImporting || !this.client.isAvailable()) return;
-		const changed = this.app.vault.getMarkdownFiles().filter(file => {
+		if (this.isImporting || !this.client.isAvailable() || this.settings.scopeType === 'none') return;
+		const changed = this.getFilesInScanScope().filter(file => {
 			const checkpoint = this.cache.checkpoints[file.path];
 			return checkpoint ? file.stat.mtime > checkpoint.mtime : file.stat.mtime >= this.cache.trackingStartedAt;
 		});
@@ -186,6 +244,25 @@ export default class EditHistoryPlugin extends Plugin {
 		await this.saveData({ settings: this.settings, cache: this.cache } satisfies StoredState);
 	}
 
+	private setStatus(text: string): void {
+		this.statusText = text;
+		this.updateStatusBar();
+	}
+
+	private updateStatusBar(): void {
+		if (!this.statusBarEl) return;
+		this.statusBarEl.setText(this.statusText === 'Ready' ? '' : this.statusText);
+		this.statusBarEl.toggleClass('is-hidden', this.statusText === 'Ready');
+	}
+
+	private scheduleStatusClear(): void {
+		if (this.statusClearTimer !== null) window.clearTimeout(this.statusClearTimer);
+		this.statusClearTimer = window.setTimeout(() => {
+			this.statusClearTimer = null;
+			this.setStatus('Ready');
+		}, 5_000);
+	}
+
 	private scheduleSave(): void {
 		if (this.saveTimer !== null) return;
 		this.saveTimer = window.setTimeout(() => {
@@ -199,6 +276,6 @@ export default class EditHistoryPlugin extends Plugin {
 		if (stored?.cache?.schemaVersion === 1) this.cache = mergeCaches(this.cache, stored.cache);
 		if (stored?.settings) this.settings = { ...this.settings, ...stored.settings };
 		await this.saveState();
-		this.refreshViews();
+		await this.loadSelectedScope();
 	}
 }

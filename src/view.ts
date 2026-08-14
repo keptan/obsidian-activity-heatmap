@@ -1,7 +1,8 @@
-import { ItemView, Notice, Setting, type WorkspaceLeaf } from 'obsidian';
+import { ItemView, type WorkspaceLeaf } from 'obsidian';
 import type EditHistoryPlugin from './main';
 import { makeIconButton, renderMonthHeatmap, wordActivityForPeriod } from './heatmap';
-import { ConfirmClearCacheModal } from './confirm-clear-modal';
+import { renderHeatmapControls } from './controls';
+import { openScopePicker, scopeLabel } from './scope-picker';
 
 export const VIEW_TYPE = 'edit-history-heatmap-view';
 
@@ -27,11 +28,8 @@ export class EditHistoryView extends ItemView {
 			this.render();
 			return;
 		}
-		const status = this.contentEl.querySelector<HTMLElement>('.edit-heatmap-status');
-		status?.setText(this.plugin.statusText);
-		status?.toggleClass('is-hidden', this.plugin.statusText === 'Ready');
 		const total = this.contentEl.querySelector<HTMLElement>('.edit-heatmap-period-total');
-		total?.setText(`${new Intl.NumberFormat().format(wordActivityForPeriod(this.plugin.cache, this.year, this.month))} words edited`);
+		total?.setText(`${new Intl.NumberFormat().format(wordActivityForPeriod(this.plugin.cache, this.year, this.month, this.plugin.getScopePaths()))} words edited`);
 	}
 
 	render(): void {
@@ -46,13 +44,20 @@ export class EditHistoryView extends ItemView {
 		title.addEventListener('click', () => { this.goToToday(); this.render(); });
 		heading.createDiv({
 			cls: 'edit-heatmap-period-total',
-			text: `${new Intl.NumberFormat().format(wordActivityForPeriod(this.plugin.cache, this.year, this.month))} words edited`,
+			text: `${new Intl.NumberFormat().format(wordActivityForPeriod(this.plugin.cache, this.year, this.month, this.plugin.getScopePaths()))} words edited`,
 		});
 		const actions = header.createDiv({ cls: 'edit-heatmap-actions' });
 		const previous = makeIconButton(actions, 'chevron-left', 'Previous month');
 		const todayButton = actions.createEl('button', { cls: 'edit-heatmap-today-button', text: 'Today' });
 		const next = makeIconButton(actions, 'chevron-right', 'Next month');
+		const currentScope = scopeLabel(this.plugin);
+		const scope = actions.createEl('button', {
+			cls: 'edit-heatmap-scope-button',
+			text: 'Scope',
+			attr: { 'aria-label': currentScope, title: currentScope },
+		});
 		const settings = makeIconButton(actions, 'settings', 'Heatmap settings');
+		scope.addEventListener('click', () => openScopePicker(scope, this.plugin));
 		previous.addEventListener('click', () => { this.shiftMonth(-1); this.render(); });
 		todayButton.addEventListener('click', () => { this.goToToday(); this.render(); });
 		next.addEventListener('click', () => {
@@ -64,11 +69,12 @@ export class EditHistoryView extends ItemView {
 		});
 		settings.addEventListener('click', () => { this.controlsVisible = !this.controlsVisible; this.render(); });
 
-		if (this.controlsVisible) this.renderControls(root);
-		const status = root.createDiv({ cls: 'edit-heatmap-status', text: this.plugin.statusText });
-		status.toggleClass('is-hidden', this.plugin.statusText === 'Ready');
+		if (this.controlsVisible) {
+			const panel = root.createDiv({ cls: 'edit-heatmap-controls' });
+			renderHeatmapControls(panel, this.plugin, () => this.render());
+		}
 		const heatmap = root.createDiv();
-		renderMonthHeatmap(heatmap, this.plugin.cache, this.plugin.settings, this.year, this.month);
+		renderMonthHeatmap(heatmap, this.plugin.cache, this.plugin.settings, this.year, this.month, this.plugin.getScopePaths());
 	}
 
 	private shiftMonth(direction: -1 | 1): void {
@@ -83,60 +89,4 @@ export class EditHistoryView extends ItemView {
 		this.month = today.getMonth();
 	}
 
-	private renderControls(root: HTMLElement): void {
-		const panel = root.createDiv({ cls: 'edit-heatmap-controls' });
-		new Setting(panel)
-			.setName('Theme')
-			.addDropdown(dropdown => dropdown
-				.addOption('changes', 'Additions and removals')
-				.addOption('activity', 'Total activity')
-				.setValue(this.plugin.settings.theme)
-				.onChange(async value => {
-					this.plugin.settings.theme = value as 'changes' | 'activity';
-					await this.plugin.saveState();
-					this.render();
-				}));
-		new Setting(panel)
-			.setName('Measure')
-			.addDropdown(dropdown => dropdown
-				.addOption('words', 'Words')
-				.addOption('lines', 'Lines')
-				.addOption('characters', 'Characters')
-				.setValue(this.plugin.settings.metric)
-				.onChange(async value => {
-					this.plugin.settings.metric = value as 'words' | 'lines' | 'characters';
-					await this.plugin.saveState();
-					this.render();
-				}));
-		new Setting(panel)
-			.setName('Scan vault history')
-			.addDropdown(dropdown => {
-				dropdown.addOption('', 'Entire vault');
-				for (const folder of this.plugin.getScanFolders()) dropdown.addOption(folder, folder);
-				dropdown.setValue(this.plugin.settings.scanFolder).onChange(async value => {
-					this.plugin.settings.scanFolder = value;
-					await this.plugin.saveState();
-				});
-			});
-		new Setting(panel)
-			.setName('Historical cache')
-			.setDesc('Import sync snapshots. Note contents are processed in memory and discarded.')
-			.addButton(button => button
-				.setButtonText(this.plugin.isImporting ? 'Cancel scan' : 'Scan history')
-				.onClick(() => {
-					if (this.plugin.isImporting) this.plugin.cancelImport();
-					else void this.plugin.importAllHistory().catch(error => {
-						console.error('Edit History Heatmap: Import failed', error);
-						new Notice('Edit history import failed. Check the developer console.');
-					});
-					this.render();
-				}));
-		new Setting(panel)
-			.setName('Clear cache')
-			.setDesc('Remove imported aggregate counts and checkpoints.')
-			.addButton(button => button
-				.setButtonText('Clear cache')
-				.setDestructive()
-				.onClick(() => new ConfirmClearCacheModal(this.plugin).open()));
-	}
 }

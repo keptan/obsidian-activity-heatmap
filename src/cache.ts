@@ -28,9 +28,10 @@ export interface FileDayAggregate {
 	counts: MetricCounts;
 }
 
-export function aggregateByDay(cache: EditHistoryCache): Map<string, FileDayAggregate[]> {
+export function aggregateByDay(cache: EditHistoryCache, paths?: ReadonlySet<string>): Map<string, FileDayAggregate[]> {
 	const byDayAndFile = new Map<string, Map<string, MetricCounts>>();
 	for (const transition of Object.values(cache.transitions)) {
+		if (paths && !paths.has(transition.path)) continue;
 		let files = byDayAndFile.get(transition.day);
 		if (!files) byDayAndFile.set(transition.day, files = new Map<string, MetricCounts>());
 		let counts = files.get(transition.path);
