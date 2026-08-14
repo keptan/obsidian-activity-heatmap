@@ -32,6 +32,14 @@ export class EditHistoryView extends ItemView {
 		total?.setText(`${new Intl.NumberFormat().format(wordActivityForPeriod(this.plugin.cache, this.year, this.month, this.plugin.getScopePaths()))} words edited`);
 	}
 
+	handleDateRollover(previous: Date, current: Date): void {
+		if (this.year === previous.getFullYear() && this.month === previous.getMonth()) {
+			this.year = current.getFullYear();
+			this.month = current.getMonth();
+		}
+		this.render();
+	}
+
 	render(): void {
 		const root = this.contentEl;
 		root.empty();

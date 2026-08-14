@@ -26,6 +26,16 @@ export class EmbeddedHeatmap extends MarkdownRenderChild {
 		this.plugin.unregisterEmbeddedView(this);
 	}
 
+	handleDateRollover(previous: Date, current: Date): void {
+		if (this.mode === 'year' && this.year === previous.getFullYear()) {
+			this.year = current.getFullYear();
+		} else if (this.mode === 'month' && this.year === previous.getFullYear() && this.month === previous.getMonth()) {
+			this.year = current.getFullYear();
+			this.month = current.getMonth();
+		}
+		this.render();
+	}
+
 	render(): void {
 		this.containerEl.empty();
 		this.containerEl.addClass('edit-heatmap-embed');

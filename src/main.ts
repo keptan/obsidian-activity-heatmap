@@ -30,6 +30,8 @@ export default class EditHistoryPlugin extends Plugin {
 	private statusClearTimer: number | null = null;
 	private cancelRequested = false;
 	private restartScanRequested = false;
+	private dateRolloverTimer: number | null = null;
+	private renderedDate = new Date();
 
 	async onload(): Promise<void> {
 		await this.loadState();
@@ -62,12 +64,14 @@ export default class EditHistoryPlugin extends Plugin {
 
 		this.app.workspace.onLayoutReady(() => void this.loadSelectedScope());
 		this.registerInterval(window.setInterval(() => void this.reconcileChangedFiles(), 5 * 60 * 1000));
+		this.scheduleDateRollover();
 	}
 
 	onunload(): void {
 		for (const timer of this.editTimers.values()) window.clearTimeout(timer);
 		if (this.saveTimer !== null) window.clearTimeout(this.saveTimer);
 		if (this.statusClearTimer !== null) window.clearTimeout(this.statusClearTimer);
+		if (this.dateRolloverTimer !== null) window.clearTimeout(this.dateRolloverTimer);
 		removeHeatmapOverlays();
 		closeScopePicker(false);
 	}
@@ -91,6 +95,24 @@ export default class EditHistoryPlugin extends Plugin {
 
 	registerEmbeddedView(view: EmbeddedHeatmap): void { this.embeddedViews.add(view); }
 	unregisterEmbeddedView(view: EmbeddedHeatmap): void { this.embeddedViews.delete(view); }
+
+	private scheduleDateRollover(): void {
+		if (this.dateRolloverTimer !== null) window.clearTimeout(this.dateRolloverTimer);
+		const now = new Date();
+		const nextDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 1);
+		this.dateRolloverTimer = window.setTimeout(() => {
+			this.dateRolloverTimer = null;
+			const previous = this.renderedDate;
+			const current = new Date();
+			this.renderedDate = current;
+			for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
+				const view = leaf.view;
+				if (view instanceof EditHistoryView) view.handleDateRollover(previous, current);
+			}
+			for (const view of this.embeddedViews) view.handleDateRollover(previous, current);
+			this.scheduleDateRollover();
+		}, nextDay.getTime() - now.getTime());
+	}
 
 	async importAllHistory(): Promise<void> {
 		if (this.isImporting) return;
