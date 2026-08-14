@@ -189,7 +189,7 @@
 .edit-heatmap-embed {
 	padding: 12px;
 	border-radius: 8px;
-	background: var(--background-secondary);
+	background: transparent;
 	font-family: var(--font-interface);
 	font-size: var(--font-ui-medium);
 	overflow-x: auto;
