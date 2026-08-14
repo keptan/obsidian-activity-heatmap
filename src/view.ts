@@ -5,6 +5,7 @@ import { renderHeatmapControls } from './controls';
 import { openScopePicker, scopeLabel } from './scope-picker';
 
 export const VIEW_TYPE = 'edit-history-heatmap-view';
+export const SIDEBAR_SCOPE_KEY = 'sidebar';
 
 export class EditHistoryView extends ItemView {
 	private year = new Date().getFullYear();
@@ -29,7 +30,7 @@ export class EditHistoryView extends ItemView {
 			return;
 		}
 		const total = this.contentEl.querySelector<HTMLElement>('.edit-heatmap-period-total');
-		total?.setText(`${new Intl.NumberFormat().format(wordActivityForPeriod(this.plugin.cache, this.year, this.month, this.plugin.getScopePaths()))} words edited`);
+		total?.setText(`${new Intl.NumberFormat().format(wordActivityForPeriod(this.plugin.cache, this.year, this.month, this.plugin.getScopePaths(SIDEBAR_SCOPE_KEY)))} words edited`);
 	}
 
 	handleDateRollover(previous: Date, current: Date): void {
@@ -52,20 +53,20 @@ export class EditHistoryView extends ItemView {
 		title.addEventListener('click', () => { this.goToToday(); this.render(); });
 		heading.createDiv({
 			cls: 'edit-heatmap-period-total',
-			text: `${new Intl.NumberFormat().format(wordActivityForPeriod(this.plugin.cache, this.year, this.month, this.plugin.getScopePaths()))} words edited`,
+			text: `${new Intl.NumberFormat().format(wordActivityForPeriod(this.plugin.cache, this.year, this.month, this.plugin.getScopePaths(SIDEBAR_SCOPE_KEY)))} words edited`,
 		});
 		const actions = header.createDiv({ cls: 'edit-heatmap-actions' });
 		const previous = makeIconButton(actions, 'chevron-left', 'Previous month');
 		const todayButton = actions.createEl('button', { cls: 'edit-heatmap-today-button', text: 'Today' });
 		const next = makeIconButton(actions, 'chevron-right', 'Next month');
-		const currentScope = scopeLabel(this.plugin);
+		const currentScope = scopeLabel(this.plugin.getScope(SIDEBAR_SCOPE_KEY));
 		const scope = actions.createEl('button', {
 			cls: 'edit-heatmap-scope-button',
 			text: 'Scope',
 			attr: { 'aria-label': currentScope, title: currentScope },
 		});
 		const settings = makeIconButton(actions, 'settings', 'Heatmap settings');
-		scope.addEventListener('click', () => openScopePicker(scope, this.plugin));
+		scope.addEventListener('click', () => openScopePicker(scope, this.plugin, SIDEBAR_SCOPE_KEY));
 		previous.addEventListener('click', () => { this.shiftMonth(-1); this.render(); });
 		todayButton.addEventListener('click', () => { this.goToToday(); this.render(); });
 		next.addEventListener('click', () => {
@@ -82,7 +83,7 @@ export class EditHistoryView extends ItemView {
 			renderHeatmapControls(panel, this.plugin, () => this.render());
 		}
 		const heatmap = root.createDiv();
-		renderMonthHeatmap(heatmap, this.plugin.cache, this.plugin.settings, this.year, this.month, this.plugin.getScopePaths());
+		renderMonthHeatmap(heatmap, this.plugin.cache, this.plugin.settings, this.year, this.month, this.plugin.getScopePaths(SIDEBAR_SCOPE_KEY));
 	}
 
 	private shiftMonth(direction: -1 | 1): void {

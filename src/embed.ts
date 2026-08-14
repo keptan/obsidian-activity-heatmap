@@ -13,7 +13,7 @@ export class EmbeddedHeatmap extends MarkdownRenderChild {
 	private controlsVisible = false;
 	private slideDirection: 'left' | 'right' | 'none' = 'none';
 
-	constructor(container: HTMLElement, private plugin: EditHistoryPlugin, source: string) {
+	constructor(container: HTMLElement, private plugin: EditHistoryPlugin, source: string, readonly scopeKey: string) {
 		super(container);
 		this.mode = source.trim().toLowerCase() === 'month' ? 'month' : 'year';
 	}
@@ -45,15 +45,15 @@ export class EmbeddedHeatmap extends MarkdownRenderChild {
 		const header = this.containerEl.createDiv({ cls: 'edit-heatmap-header edit-heatmap-embed-header' });
 		header.createDiv({
 			cls: 'edit-heatmap-period-total',
-			text: `${new Intl.NumberFormat().format(wordActivityForPeriod(this.plugin.cache, this.year, this.mode === 'month' ? this.month : undefined, this.plugin.getScopePaths()))} words edited`,
+			text: `${new Intl.NumberFormat().format(wordActivityForPeriod(this.plugin.cache, this.year, this.mode === 'month' ? this.month : undefined, this.plugin.getScopePaths(this.scopeKey)))} words edited`,
 		});
 		const controls = header.createDiv({ cls: 'edit-heatmap-embed-controls' });
 		const actions = controls.createDiv({ cls: 'edit-heatmap-actions' });
 		const previous = makeIconButton(actions, 'chevron-left', this.mode === 'year' ? 'Previous year' : 'Previous month');
 		const label = actions.createSpan({ cls: 'edit-heatmap-date-label' });
 		const next = makeIconButton(actions, 'chevron-right', this.mode === 'year' ? 'Next year' : 'Next month');
-		const scope = actions.createEl('button', { cls: 'edit-heatmap-scope-button', text: scopeLabel(this.plugin) });
-		scope.addEventListener('click', () => openScopePicker(scope, this.plugin));
+		const scope = actions.createEl('button', { cls: 'edit-heatmap-scope-button', text: scopeLabel(this.plugin.getScope(this.scopeKey)) });
+		scope.addEventListener('click', () => openScopePicker(scope, this.plugin, this.scopeKey));
 		const toggles = controls.createDiv({ cls: 'edit-heatmap-actions' });
 		const yearButton = makeIconButton(toggles, 'calendar-range', 'Year view');
 		const monthButton = makeIconButton(toggles, 'calendar-days', 'Month view');
@@ -78,8 +78,8 @@ export class EmbeddedHeatmap extends MarkdownRenderChild {
 
 		const heatmap = this.containerEl.createDiv({ cls: 'edit-heatmap-content' });
 		if (slideDirection !== 'none') heatmap.addClass(`slide-${slideDirection}`);
-		if (this.mode === 'year') renderYearHeatmap(heatmap, this.plugin.cache, this.plugin.settings, this.year, this.plugin.getScopePaths());
-		else renderMonthHeatmap(heatmap, this.plugin.cache, this.plugin.settings, this.year, this.month, this.plugin.getScopePaths());
+		if (this.mode === 'year') renderYearHeatmap(heatmap, this.plugin.cache, this.plugin.settings, this.year, this.plugin.getScopePaths(this.scopeKey));
+		else renderMonthHeatmap(heatmap, this.plugin.cache, this.plugin.settings, this.year, this.month, this.plugin.getScopePaths(this.scopeKey));
 	}
 
 	private shift(direction: -1 | 1): void {

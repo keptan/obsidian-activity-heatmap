@@ -4,7 +4,7 @@ import { HistoryIndexer } from './indexer';
 import { EditHistorySettingTab } from './settings';
 import { SyncHistoryClient } from './sync-history';
 import { DEFAULT_SETTINGS, type EditHistoryCache, type EditHistorySettings } from './types';
-import { EditHistoryView, VIEW_TYPE } from './view';
+import { EditHistoryView, SIDEBAR_SCOPE_KEY, VIEW_TYPE } from './view';
 import { removeHeatmapOverlays } from './heatmap';
 import { EmbeddedHeatmap } from './embed';
 import { fileMatchesScope, hasScope, resolveScope, type ScopeSelection } from './scope';
@@ -13,6 +13,7 @@ import { closeScopePicker } from './scope-picker';
 interface StoredState {
 	settings?: Partial<EditHistorySettings> & { scopeType?: string; scopeValue?: string };
 	cache?: EditHistoryCache;
+	viewScopes?: Record<string, ScopeSelection>;
 }
 
 export default class EditHistoryPlugin extends Plugin {
@@ -25,7 +26,10 @@ export default class EditHistoryPlugin extends Plugin {
 	private editTimers = new Map<string, number>();
 	private saveTimer: number | null = null;
 	private embeddedViews = new Set<EmbeddedHeatmap>();
+	private viewScopes: Record<string, ScopeSelection> = {};
 	private scopePaths = new Set<string>();
+	private scopePathsByKey = new Map<string, Set<string>>();
+	private activeEmbeddedScopeKeys = new Map<string, number>();
 	private statusBarEl!: HTMLElement;
 	private statusClearTimer: number | null = null;
 	private cancelRequested = false;
@@ -44,7 +48,8 @@ export default class EditHistoryPlugin extends Plugin {
 		this.addCommand({ id: 'import-sync-history', name: 'Import sync history', callback: () => void this.importAllHistory() });
 		this.addSettingTab(new EditHistorySettingTab(this.app, this));
 		this.registerMarkdownCodeBlockProcessor('edit-history-heatmap', (source, element, context) => {
-			context.addChild(new EmbeddedHeatmap(element, this, source));
+			const line = context.getSectionInfo(element)?.lineStart ?? 0;
+			context.addChild(new EmbeddedHeatmap(element, this, source, `embed:${context.sourcePath}:${line}`));
 		});
 
 		this.registerEvent(this.app.vault.on('modify', file => {
@@ -57,6 +62,7 @@ export default class EditHistoryPlugin extends Plugin {
 			if (file instanceof TFile && file.extension === 'md') {
 				renameCachedFile(this.cache, oldPath, file.path);
 				this.scopePaths.delete(oldPath);
+				for (const paths of this.scopePathsByKey.values()) paths.delete(oldPath);
 				this.scheduleSave();
 				this.scheduleFileIndex(file);
 			}
@@ -93,8 +99,33 @@ export default class EditHistoryPlugin extends Plugin {
 		for (const view of this.embeddedViews) view.render();
 	}
 
-	registerEmbeddedView(view: EmbeddedHeatmap): void { this.embeddedViews.add(view); }
-	unregisterEmbeddedView(view: EmbeddedHeatmap): void { this.embeddedViews.delete(view); }
+	registerEmbeddedView(view: EmbeddedHeatmap): void {
+		this.embeddedViews.add(view);
+		this.activeEmbeddedScopeKeys.set(view.scopeKey, (this.activeEmbeddedScopeKeys.get(view.scopeKey) ?? 0) + 1);
+		if (!this.viewScopes[view.scopeKey]) {
+			this.viewScopes[view.scopeKey] = this.cloneScope(this.currentScope());
+			this.scheduleSave();
+		}
+		const previousPaths = new Set(this.scopePaths);
+		this.rebuildScopePaths();
+		const expanded = Array.from(this.scopePaths).some(path => !previousPaths.has(path));
+		if (hasScope(this.getScope(view.scopeKey))) {
+			if (this.isImporting && expanded) {
+				this.restartScanRequested = true;
+				this.cancelImport();
+			} else if (!this.isImporting) {
+				void this.importAllHistory();
+			}
+		}
+	}
+
+	unregisterEmbeddedView(view: EmbeddedHeatmap): void {
+		this.embeddedViews.delete(view);
+		const count = (this.activeEmbeddedScopeKeys.get(view.scopeKey) ?? 1) - 1;
+		if (count > 0) this.activeEmbeddedScopeKeys.set(view.scopeKey, count);
+		else this.activeEmbeddedScopeKeys.delete(view.scopeKey);
+		this.rebuildScopePaths();
+	}
 
 	private scheduleDateRollover(): void {
 		if (this.dateRolloverTimer !== null) window.clearTimeout(this.dateRolloverTimer);
@@ -120,7 +151,7 @@ export default class EditHistoryPlugin extends Plugin {
 			new Notice('Enable Obsidian Sync before importing history.');
 			return;
 		}
-		if (!hasScope(this.currentScope())) {
+		if (this.scopePaths.size === 0) {
 			new Notice('Choose at least one folder or tag from a heatmap first.');
 			return;
 		}
@@ -203,22 +234,34 @@ export default class EditHistoryPlugin extends Plugin {
 		return this.app.vault.getMarkdownFiles().filter(file => this.scopePaths.has(file.path));
 	}
 
-	getScopePaths(): ReadonlySet<string> { return this.scopePaths; }
+	getScopePaths(scopeKey: string): ReadonlySet<string> {
+		return this.scopePathsByKey.get(scopeKey) ?? new Set<string>();
+	}
+
+	getScope(scopeKey: string): ScopeSelection {
+		return scopeKey === SIDEBAR_SCOPE_KEY
+			? this.currentScope()
+			: this.cloneScope(this.viewScopes[scopeKey] ?? { all: false, folders: [], tags: [] });
+	}
 
 	beginScopeEditing(): void {
 		if (this.isImporting) this.cancelImport();
 	}
 
-	async applyScope(scope: ScopeSelection): Promise<void> {
-		this.settings.scopeAll = scope.all;
-		this.settings.scopeFolders = [...scope.folders];
-		this.settings.scopeTags = [...scope.tags];
-		const files = resolveScope(this.app, scope);
-		this.scopePaths = new Set(files.map(file => file.path));
+	async applyScope(scopeKey: string, scope: ScopeSelection): Promise<void> {
+		if (scopeKey === SIDEBAR_SCOPE_KEY) {
+			this.settings.scopeAll = scope.all;
+			this.settings.scopeFolders = [...scope.folders];
+			this.settings.scopeTags = [...scope.tags];
+		} else {
+			this.viewScopes[scopeKey] = this.cloneScope(scope);
+		}
+		this.rebuildScopePaths();
+		const files = this.scopePathsByKey.get(scopeKey) ?? new Set<string>();
 		await this.saveState();
-		this.setStatus(`${files.length} files in scope`);
+		this.setStatus(`${files.size} files in scope`);
 		this.refreshViews();
-		if (!hasScope(scope)) {
+		if (this.scopePaths.size === 0) {
 			this.restartScanRequested = false;
 			this.setStatus(this.isImporting ? 'History scan paused' : 'Ready');
 			return;
@@ -232,13 +275,7 @@ export default class EditHistoryPlugin extends Plugin {
 	}
 
 	private async loadSelectedScope(): Promise<void> {
-		if (!hasScope(this.currentScope())) {
-			this.scopePaths.clear();
-			this.refreshViews();
-			return;
-		}
-		const files = resolveScope(this.app, this.currentScope());
-		this.scopePaths = new Set(files.map(file => file.path));
+		this.rebuildScopePaths();
 		this.refreshViews();
 	}
 
@@ -263,7 +300,7 @@ export default class EditHistoryPlugin extends Plugin {
 	}
 
 	private scheduleFileIndex(file: TFile): void {
-		if (!hasScope(this.currentScope())) return;
+		if (this.scopePaths.size === 0) return;
 		const existing = this.editTimers.get(file.path);
 		if (existing !== undefined) window.clearTimeout(existing);
 		this.editTimers.set(file.path, window.setTimeout(() => {
@@ -273,7 +310,18 @@ export default class EditHistoryPlugin extends Plugin {
 	}
 
 	private async refreshScopeAndIndexFile(file: TFile): Promise<void> {
-		if (fileMatchesScope(this.app, file, this.currentScope())) this.scopePaths.add(file.path);
+		let included = false;
+		for (const scopeKey of this.activeScopeKeys()) {
+			const paths = this.scopePathsByKey.get(scopeKey) ?? new Set<string>();
+			if (fileMatchesScope(this.app, file, this.getScope(scopeKey))) {
+				paths.add(file.path);
+				included = true;
+			} else {
+				paths.delete(file.path);
+			}
+			this.scopePathsByKey.set(scopeKey, paths);
+		}
+		if (included) this.scopePaths.add(file.path);
 		else this.scopePaths.delete(file.path);
 		await this.indexFile(file);
 	}
@@ -294,7 +342,7 @@ export default class EditHistoryPlugin extends Plugin {
 	}
 
 	private async reconcileChangedFiles(): Promise<void> {
-		if (this.isImporting || !this.client.isAvailable() || !hasScope(this.currentScope())) return;
+		if (this.isImporting || !this.client.isAvailable() || this.scopePaths.size === 0) return;
 		const changed = this.getFilesInScanScope().filter(file => {
 			const checkpoint = this.cache.checkpoints[file.path];
 			return checkpoint ? file.stat.mtime > checkpoint.mtime : file.stat.mtime >= this.cache.trackingStartedAt;
@@ -305,7 +353,41 @@ export default class EditHistoryPlugin extends Plugin {
 	private async loadState(): Promise<void> {
 		const stored = await this.loadData() as StoredState | null;
 		this.settings = this.normalizeSettings(stored?.settings);
+		this.viewScopes = this.normalizeViewScopes(stored?.viewScopes);
 		if (stored?.cache?.schemaVersion === 1) this.cache = stored.cache;
+	}
+
+	private activeScopeKeys(): string[] {
+		return [SIDEBAR_SCOPE_KEY, ...this.activeEmbeddedScopeKeys.keys()];
+	}
+
+	private rebuildScopePaths(): void {
+		this.scopePaths.clear();
+		const activeKeys = new Set(this.activeScopeKeys());
+		for (const key of this.scopePathsByKey.keys()) {
+			if (!activeKeys.has(key)) this.scopePathsByKey.delete(key);
+		}
+		for (const scopeKey of activeKeys) {
+			const paths = new Set(resolveScope(this.app, this.getScope(scopeKey)).map(file => file.path));
+			this.scopePathsByKey.set(scopeKey, paths);
+			for (const path of paths) this.scopePaths.add(path);
+		}
+	}
+
+	private cloneScope(scope: ScopeSelection): ScopeSelection {
+		return { all: scope.all, folders: [...scope.folders], tags: [...scope.tags] };
+	}
+
+	private normalizeViewScopes(scopes: Record<string, ScopeSelection> | undefined): Record<string, ScopeSelection> {
+		const normalized: Record<string, ScopeSelection> = {};
+		for (const [key, scope] of Object.entries(scopes ?? {})) {
+			normalized[key] = {
+				all: Boolean(scope.all),
+				folders: Array.isArray(scope.folders) ? scope.folders.filter(value => typeof value === 'string') : [],
+				tags: Array.isArray(scope.tags) ? scope.tags.filter(value => typeof value === 'string') : [],
+			};
+		}
+		return normalized;
 	}
 
 	private currentScope(): ScopeSelection {
@@ -334,7 +416,7 @@ export default class EditHistoryPlugin extends Plugin {
 			window.clearTimeout(this.saveTimer);
 			this.saveTimer = null;
 		}
-		await this.saveData({ settings: this.settings, cache: this.cache } satisfies StoredState);
+		await this.saveData({ settings: this.settings, cache: this.cache, viewScopes: this.viewScopes } satisfies StoredState);
 	}
 
 	private setStatus(text: string): void {
@@ -372,6 +454,7 @@ export default class EditHistoryPlugin extends Plugin {
 		const stored = await this.loadData() as StoredState | null;
 		if (stored?.cache?.schemaVersion === 1) this.cache = mergeCaches(this.cache, stored.cache);
 		if (stored?.settings) this.settings = this.normalizeSettings(stored.settings);
+		if (stored?.viewScopes) this.viewScopes = this.normalizeViewScopes(stored.viewScopes);
 		await this.saveState();
 		await this.loadSelectedScope();
 	}

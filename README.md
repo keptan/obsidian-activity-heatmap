@@ -10,6 +10,8 @@ It can track words, lines, or characters, and show either total activity or addi
 
 Open **Edit History Heatmap: Open heatmap**, click **Scope**, and pick any folders or tags you want to include. Nothing is scanned until you choose a scope. Opening the scope menu pauses the current scan, and closing it starts scanning your new selection.
 
+Scopes belong to individual heatmaps. The sidebar and each embedded code block remember their own selection, so two heatmaps can show different folders or tags side by side. Files shared by several scopes are scanned only once.
+
 The sidebar shows a month calendar. To put the rolling year heatmap in a note, use:
 
 ````markdown

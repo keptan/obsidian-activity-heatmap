@@ -6,18 +6,15 @@ let activePicker: HTMLElement | null = null;
 let activeAnchor: HTMLElement | null = null;
 let activeCleanup: ((commit: boolean) => void) | null = null;
 
-export function openScopePicker(anchor: HTMLElement, plugin: EditHistoryPlugin): void {
+export function openScopePicker(anchor: HTMLElement, plugin: EditHistoryPlugin, scopeKey: string): void {
 	if (activePicker && activeAnchor === anchor) {
 		activeCleanup?.(true);
 		return;
 	}
 	activeCleanup?.(true);
 	plugin.beginScopeEditing();
-	const draft: ScopeSelection = {
-		all: plugin.settings.scopeAll,
-		folders: [...plugin.settings.scopeFolders],
-		tags: [...plugin.settings.scopeTags],
-	};
+	const selectedScope = plugin.getScope(scopeKey);
+	const draft: ScopeSelection = { all: selectedScope.all, folders: [...selectedScope.folders], tags: [...selectedScope.tags] };
 	const picker = document.body.createDiv({ cls: 'edit-heatmap-scope-picker' });
 	activePicker = picker;
 	activeAnchor = anchor;
@@ -37,7 +34,7 @@ export function openScopePicker(anchor: HTMLElement, plugin: EditHistoryPlugin):
 		if (activePicker === picker) activePicker = null;
 		if (activeAnchor === anchor) activeAnchor = null;
 		if (activeCleanup === close) activeCleanup = null;
-		if (commit) void plugin.applyScope(draft);
+		if (commit) void plugin.applyScope(scopeKey, draft);
 	};
 	const makeOption = (parent: HTMLElement, title: string, description: string, selected: () => boolean, toggle: () => void) => {
 		const button = parent.createEl('button', { cls: 'edit-heatmap-scope-option' });
@@ -91,9 +88,9 @@ export function openScopePicker(anchor: HTMLElement, plugin: EditHistoryPlugin):
 	activeCleanup = close;
 }
 
-export function scopeLabel(plugin: EditHistoryPlugin): string {
-	if (plugin.settings.scopeAll) return 'All .md files';
-	const selections = [...plugin.settings.scopeFolders, ...plugin.settings.scopeTags];
+export function scopeLabel(scope: ScopeSelection): string {
+	if (scope.all) return 'All .md files';
+	const selections = [...scope.folders, ...scope.tags];
 	if (selections.length === 0) return 'Choose scope';
 	return selections.length === 1 ? selections[0] ?? 'Choose scope' : `${selections.length} scopes`;
 }
