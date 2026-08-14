@@ -1,6 +1,6 @@
 import { ItemView, type WorkspaceLeaf } from 'obsidian';
 import type EditHistoryPlugin from './main';
-import { makeIconButton, renderMonthHeatmap, wordActivityForPeriod } from './heatmap';
+import { makeIconButton, renderMonthHeatmap, wordsWrittenForPeriod } from './heatmap';
 import { renderHeatmapControls } from './controls';
 import { openScopePicker, scopeLabel } from './scope-picker';
 
@@ -30,7 +30,7 @@ export class EditHistoryView extends ItemView {
 			return;
 		}
 		const total = this.contentEl.querySelector<HTMLElement>('.edit-heatmap-period-total');
-		total?.setText(`${new Intl.NumberFormat().format(wordActivityForPeriod(this.plugin.cache, this.year, this.month, this.plugin.getScopePaths(SIDEBAR_SCOPE_KEY)))} words edited`);
+		total?.setText(`${new Intl.NumberFormat().format(wordsWrittenForPeriod(this.plugin.cache, this.year, this.month, this.plugin.getScopePaths(SIDEBAR_SCOPE_KEY)))} words written`);
 	}
 
 	handleDateRollover(previous: Date, current: Date): void {
@@ -53,7 +53,7 @@ export class EditHistoryView extends ItemView {
 		title.addEventListener('click', () => { this.goToToday(); this.render(); });
 		heading.createDiv({
 			cls: 'edit-heatmap-period-total',
-			text: `${new Intl.NumberFormat().format(wordActivityForPeriod(this.plugin.cache, this.year, this.month, this.plugin.getScopePaths(SIDEBAR_SCOPE_KEY)))} words edited`,
+			text: `${new Intl.NumberFormat().format(wordsWrittenForPeriod(this.plugin.cache, this.year, this.month, this.plugin.getScopePaths(SIDEBAR_SCOPE_KEY)))} words written`,
 		});
 		const actions = header.createDiv({ cls: 'edit-heatmap-actions' });
 		const previous = makeIconButton(actions, 'chevron-left', 'Previous month');

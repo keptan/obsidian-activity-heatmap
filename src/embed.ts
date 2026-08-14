@@ -1,6 +1,6 @@
 import { MarkdownRenderChild } from 'obsidian';
 import type EditHistoryPlugin from './main';
-import { formatYearWindow, makeIconButton, renderMonthHeatmap, renderYearHeatmap, wordActivityForPeriod } from './heatmap';
+import { formatYearWindow, makeIconButton, renderMonthHeatmap, renderYearHeatmap, wordsWrittenForPeriod } from './heatmap';
 import { renderHeatmapControls } from './controls';
 import { openScopePicker, scopeLabel } from './scope-picker';
 
@@ -45,7 +45,7 @@ export class EmbeddedHeatmap extends MarkdownRenderChild {
 		const header = this.containerEl.createDiv({ cls: 'edit-heatmap-header edit-heatmap-embed-header' });
 		header.createDiv({
 			cls: 'edit-heatmap-period-total',
-			text: `${new Intl.NumberFormat().format(wordActivityForPeriod(this.plugin.cache, this.year, this.mode === 'month' ? this.month : undefined, this.plugin.getScopePaths(this.scopeKey)))} words edited`,
+			text: `${new Intl.NumberFormat().format(wordsWrittenForPeriod(this.plugin.cache, this.year, this.mode === 'month' ? this.month : undefined, this.plugin.getScopePaths(this.scopeKey)))} words written`,
 		});
 		const controls = header.createDiv({ cls: 'edit-heatmap-embed-controls' });
 		const actions = controls.createDiv({ cls: 'edit-heatmap-actions' });

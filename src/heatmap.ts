@@ -67,7 +67,7 @@ function formatNumber(value: number): string {
 	return new Intl.NumberFormat().format(value);
 }
 
-export function wordActivityForPeriod(cache: EditHistoryCache, year: number, month?: number, paths?: ReadonlySet<string>): number {
+export function wordsWrittenForPeriod(cache: EditHistoryCache, year: number, month?: number, paths?: ReadonlySet<string>): number {
 	const prefix = month === undefined ? null : `${year}-${String(month + 1).padStart(2, '0')}-`;
 	const window = month === undefined ? yearWindow(year) : null;
 	const startDay = window ? localDay(window.start) : '';
@@ -75,7 +75,7 @@ export function wordActivityForPeriod(cache: EditHistoryCache, year: number, mon
 	let total = 0;
 	for (const [day, files] of aggregateByDay(cache, paths)) {
 		if (prefix ? !day.startsWith(prefix) : day < startDay || day > endDay) continue;
-		for (const file of files) total += file.counts.words.added + file.counts.words.removed;
+		for (const file of files) total += file.counts.words.added;
 	}
 	return total;
 }
