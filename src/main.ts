@@ -5,7 +5,7 @@ import { EditHistorySettingTab } from './settings';
 import { SyncHistoryClient } from './sync-history';
 import { DEFAULT_SETTINGS, type EditHistoryCache, type EditHistorySettings } from './types';
 import { EditHistoryView, SIDEBAR_SCOPE_KEY, VIEW_TYPE } from './view';
-import { removeHeatmapOverlays } from './heatmap';
+import { isHeatmapSelectionActive, removeHeatmapOverlays } from './heatmap';
 import { EmbeddedHeatmap } from './embed';
 import { fileMatchesScope, hasScope, resolveScope, type ScopeSelection } from './scope';
 import { closeScopePicker } from './scope-picker';
@@ -94,6 +94,10 @@ export default class EditHistoryPlugin extends Plugin {
 	}
 
 	refreshViews(): void {
+		if (isHeatmapSelectionActive()) {
+			this.scheduleProgressRefresh(100);
+			return;
+		}
 		for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
 			const view = leaf.view;
 			if (view instanceof EditHistoryView) view.refreshFromPlugin();
@@ -448,12 +452,12 @@ export default class EditHistoryPlugin extends Plugin {
 		}, 5_000);
 	}
 
-	private scheduleProgressRefresh(): void {
+	private scheduleProgressRefresh(delay = 250): void {
 		if (this.progressRefreshTimer !== null) return;
 		this.progressRefreshTimer = window.setTimeout(() => {
 			this.progressRefreshTimer = null;
 			this.refreshViews();
-		}, 250);
+		}, delay);
 	}
 
 	private scheduleSave(): void {

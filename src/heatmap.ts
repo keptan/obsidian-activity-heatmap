@@ -200,6 +200,11 @@ export function renderMonthHeatmap(
 
 let tooltip: HTMLElement | null = null;
 let activeSelectionCleanup: (() => void) | null = null;
+
+export function isHeatmapSelectionActive(): boolean {
+	return activeSelectionCleanup !== null;
+}
+
 function showTooltip(target: HTMLElement, content: DocumentFragment): void {
 	if (!tooltip) tooltip = document.body.createDiv({ cls: 'edit-heatmap-tooltip' });
 	tooltip.replaceChildren(content);
@@ -255,11 +260,15 @@ function attachDragSelection(container: HTMLElement, metric: Metric): void {
 			box.remove();
 			window.removeEventListener('pointermove', move);
 			window.removeEventListener('pointerup', finish);
+			window.removeEventListener('pointercancel', finish);
+			window.removeEventListener('blur', finish);
 			activeSelectionCleanup = null;
 		};
 		const move = (moveEvent: PointerEvent) => update(moveEvent.clientX, moveEvent.clientY);
 		window.addEventListener('pointermove', move);
 		window.addEventListener('pointerup', finish);
+		window.addEventListener('pointercancel', finish);
+		window.addEventListener('blur', finish);
 		activeSelectionCleanup = finish;
 		update(startX, startY);
 	});
