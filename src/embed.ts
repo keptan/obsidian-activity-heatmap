@@ -1,6 +1,6 @@
 import { MarkdownRenderChild } from 'obsidian';
 import type EditHistoryPlugin from './main';
-import { makeIconButton, renderMonthHeatmap, renderYearHeatmap } from './heatmap';
+import { makeIconButton, renderMonthHeatmap, renderYearHeatmap, wordActivityForPeriod } from './heatmap';
 
 type ViewMode = 'year' | 'month';
 
@@ -27,6 +27,10 @@ export class EmbeddedHeatmap extends MarkdownRenderChild {
 		this.containerEl.empty();
 		this.containerEl.addClass('edit-heatmap-embed');
 		const header = this.containerEl.createDiv({ cls: 'edit-heatmap-header edit-heatmap-embed-header' });
+		header.createDiv({
+			cls: 'edit-heatmap-period-total',
+			text: `${new Intl.NumberFormat().format(wordActivityForPeriod(this.plugin.cache, this.year, this.mode === 'month' ? this.month : undefined))} words edited`,
+		});
 		const actions = header.createDiv({ cls: 'edit-heatmap-actions' });
 		const previous = makeIconButton(actions, 'chevron-left', this.mode === 'year' ? 'Previous year' : 'Previous month');
 		const label = actions.createSpan({ cls: 'edit-heatmap-date-label' });

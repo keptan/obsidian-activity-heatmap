@@ -6,6 +6,7 @@ interface DayData {
 	files: FileDayAggregate[];
 	added: number;
 	removed: number;
+	wordsAdded: number;
 }
 
 interface SelectionFileData {
@@ -25,6 +26,7 @@ function buildDays(cache: EditHistoryCache, metric: Metric): Map<string, DayData
 			files,
 			added: files.reduce((sum, file) => sum + file.counts[metric].added, 0),
 			removed: files.reduce((sum, file) => sum + file.counts[metric].removed, 0),
+			wordsAdded: files.reduce((sum, file) => sum + file.counts.words.added, 0),
 		});
 	}
 	return result;
@@ -51,6 +53,18 @@ function formatNumber(value: number): string {
 	return new Intl.NumberFormat().format(value);
 }
 
+export function wordActivityForPeriod(cache: EditHistoryCache, year: number, month?: number): number {
+	const prefix = month === undefined
+		? `${year}-`
+		: `${year}-${String(month + 1).padStart(2, '0')}-`;
+	let total = 0;
+	for (const [day, files] of aggregateByDay(cache)) {
+		if (!day.startsWith(prefix)) continue;
+		for (const file of files) total += file.counts.words.added + file.counts.words.removed;
+	}
+	return total;
+}
+
 function tooltipContent(day: string, data: DayData, metric: Metric): DocumentFragment {
 	const fragment = createFragment();
 	const root = fragment.createDiv({ cls: 'edit-heatmap-tooltip-content' });
@@ -75,6 +89,7 @@ function setupCell(cell: HTMLElement, key: string, data: DayData, settings: Edit
 	cell.dataset.day = key;
 	cell.dataset.added = String(data.added);
 	cell.dataset.removed = String(data.removed);
+	cell.dataset.wordsAdded = String(data.wordsAdded);
 	cell.dataset.files = JSON.stringify(data.files.map(file => ({
 		path: file.path,
 		added: file.counts[settings.metric].added,
@@ -123,7 +138,7 @@ export function renderYearHeatmap(container: HTMLElement, cache: EditHistoryCach
 				cell.addClass('is-outside');
 				continue;
 			}
-			const data = days.get(key) ?? { files: [], added: 0, removed: 0 };
+			const data = days.get(key) ?? { files: [], added: 0, removed: 0, wordsAdded: 0 };
 			setupCell(cell, key, data, settings, max);
 		}
 		cursor.setDate(cursor.getDate() + 7);
@@ -155,7 +170,7 @@ export function renderMonthHeatmap(
 		const date = new Date(cursor);
 		date.setDate(cursor.getDate() + index);
 		const key = localDay(date);
-		const data = days.get(key) ?? { files: [], added: 0, removed: 0 };
+		const data = days.get(key) ?? { files: [], added: 0, removed: 0, wordsAdded: 0 };
 		const cell = grid.createDiv({ cls: 'edit-heatmap-cell edit-heatmap-calendar-day' });
 		if (date.getMonth() !== month) cell.addClass('is-adjacent-month');
 		if (key === today) cell.addClass('is-today');
@@ -196,7 +211,7 @@ function attachDragSelection(container: HTMLElement, metric: Metric): void {
 		const update = (x: number, y: number) => {
 			const left = Math.min(startX, x), top = Math.min(startY, y), right = Math.max(startX, x), bottom = Math.max(startY, y);
 			box.style.left = `${left}px`; box.style.top = `${top}px`; box.style.width = `${right - left}px`; box.style.height = `${bottom - top}px`;
-			let added = 0, removed = 0, selected = 0;
+			let added = 0, removed = 0, wordsAdded = 0, selected = 0;
 			const fileTotals = new Map<string, ChangeCount>();
 			for (const cell of Array.from(container.querySelectorAll<HTMLElement>('[data-day]'))) {
 				const rect = cell.getBoundingClientRect();
@@ -206,6 +221,7 @@ function attachDragSelection(container: HTMLElement, metric: Metric): void {
 					selected++;
 					added += Number(cell.dataset.added) || 0;
 					removed += Number(cell.dataset.removed) || 0;
+					wordsAdded += Number(cell.dataset.wordsAdded) || 0;
 					for (const file of parseSelectionFiles(cell.dataset.files)) {
 						const total = fileTotals.get(file.path) ?? { added: 0, removed: 0 };
 						total.added += file.added;
@@ -214,7 +230,7 @@ function attachDragSelection(container: HTMLElement, metric: Metric): void {
 					}
 				}
 			}
-			renderSelectionStats(stats, selected, added, removed, metric, fileTotals);
+			renderSelectionStats(stats, selected, added, removed, wordsAdded, metric, fileTotals);
 		};
 		const finish = () => {
 			for (const cell of Array.from(container.querySelectorAll<HTMLElement>('.is-selected'))) cell.removeClass('is-selected');
@@ -253,11 +269,14 @@ function renderSelectionStats(
 	selected: number,
 	added: number,
 	removed: number,
+	wordsAdded: number,
 	metric: Metric,
 	fileTotals: Map<string, ChangeCount>,
 ): void {
 	stats.empty();
-	stats.createDiv({ cls: 'edit-heatmap-selection-title', text: `${selected} days · +${formatNumber(added)} −${formatNumber(removed)} ${metric}` });
+	const average = selected > 0 ? wordsAdded / selected : 0;
+	const formattedAverage = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(average);
+	stats.createDiv({ cls: 'edit-heatmap-selection-title', text: `${formattedAverage} words added/day · +${formatNumber(added)} −${formatNumber(removed)} ${metric}` });
 	const files = Array.from(fileTotals, ([path, counts]) => ({ path, ...counts }))
 		.sort((a, b) => b.added + b.removed - a.added - a.removed);
 	for (const file of files.slice(0, 20)) {

@@ -1,6 +1,6 @@
 import { ItemView, Notice, Setting, type WorkspaceLeaf } from 'obsidian';
 import type EditHistoryPlugin from './main';
-import { makeIconButton, renderMonthHeatmap } from './heatmap';
+import { makeIconButton, renderMonthHeatmap, wordActivityForPeriod } from './heatmap';
 import { ConfirmClearCacheModal } from './confirm-clear-modal';
 
 export const VIEW_TYPE = 'edit-history-heatmap-view';
@@ -27,10 +27,15 @@ export class EditHistoryView extends ItemView {
 		root.empty();
 		root.addClass('edit-history-view');
 		const header = root.createDiv({ cls: 'edit-heatmap-calendar-nav' });
-		const title = header.createEl('h3', { cls: 'edit-heatmap-calendar-title' });
+		const heading = header.createDiv({ cls: 'edit-heatmap-calendar-heading' });
+		const title = heading.createEl('h3', { cls: 'edit-heatmap-calendar-title' });
 		title.createSpan({ cls: 'edit-heatmap-calendar-month', text: new Date(this.year, this.month, 1).toLocaleDateString(undefined, { month: 'short' }) });
 		title.createSpan({ cls: 'edit-heatmap-calendar-year', text: ` ${this.year}` });
 		title.addEventListener('click', () => { this.goToToday(); this.render(); });
+		heading.createDiv({
+			cls: 'edit-heatmap-period-total',
+			text: `${new Intl.NumberFormat().format(wordActivityForPeriod(this.plugin.cache, this.year, this.month))} words edited`,
+		});
 		const actions = header.createDiv({ cls: 'edit-heatmap-actions' });
 		const previous = makeIconButton(actions, 'chevron-left', 'Previous month');
 		const todayButton = actions.createEl('button', { cls: 'edit-heatmap-today-button', text: 'Today' });

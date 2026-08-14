@@ -42,6 +42,16 @@
 	cursor: pointer;
 }
 
+.edit-heatmap-calendar-heading {
+	min-width: 0;
+}
+
+.edit-heatmap-period-total {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	white-space: nowrap;
+}
+
 .edit-heatmap-calendar-month { font-weight: 500; }
 .edit-heatmap-calendar-year { color: var(--interactive-accent); }
 
@@ -81,7 +91,15 @@
 	overflow-x: auto;
 }
 
-.edit-heatmap-embed-header { margin-bottom: 8px; }
+.edit-heatmap-embed-header {
+	display: grid;
+	grid-template-columns: 1fr auto 1fr;
+	margin-bottom: 8px;
+}
+
+.edit-heatmap-embed-header > .edit-heatmap-actions:last-child {
+	justify-self: end;
+}
 
 .edit-heatmap-controls {
 	margin: 10px 0;
