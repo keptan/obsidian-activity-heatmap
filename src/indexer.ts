@@ -30,7 +30,7 @@ export class HistoryIndexer {
 		const chronological = [...result.versions].reverse();
 		let previous = '';
 		let startIndex = 0;
-		if (incremental) {
+		if (incremental || chronological.length > 0) {
 			const anchor = chronological[0];
 			if (!anchor) return 0;
 			previous = await this.client.readVersion(anchor.uid);

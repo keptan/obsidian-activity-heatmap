@@ -42,13 +42,12 @@ const client = {
 const cache = { schemaVersion: 1, trackingStartedAt: 0, clearedAt: 0, transitions: {}, checkpoints: {} };
 const file = { path: 'Note.md', stat: { mtime: 10 } };
 const indexer = new HistoryIndexer(client, cache);
-assert.equal(await indexer.indexFile(file, true), 2);
-assert.equal(Object.keys(cache.transitions).length, 2);
-assert.deepEqual(cache.transitions['1'].counts.words, { added: 1, removed: 0 });
+assert.equal(await indexer.indexFile(file, true), 1);
+assert.equal(Object.keys(cache.transitions).length, 1);
 assert.deepEqual(cache.transitions['2'].counts.words, { added: 1, removed: 0 });
 file.stat.mtime = 20;
 assert.equal(await indexer.indexFile(file), 1);
-assert.equal(Object.keys(cache.transitions).length, 3);
+assert.equal(Object.keys(cache.transitions).length, 2);
 assert.deepEqual(cache.transitions['3'].counts.words, { added: 1, removed: 0 });
 await fs.rm(tempDir, { recursive: true });
 

@@ -2,6 +2,8 @@
 
 Edit History Heatmap builds a local contribution calendar from Obsidian Sync snapshots. It records aggregate word, line, and character additions and removals only. Historical note contents are decoded in memory and are never stored by the plugin.
 
+The oldest available Sync snapshot for each file is treated as a baseline, not as a file-creation event. This avoids attributing pre-existing contents to the day a file was first uploaded or imported into Sync.
+
 ## Status
 
 This plugin is in early development. It uses private Obsidian Sync APIs, which may change without notice.

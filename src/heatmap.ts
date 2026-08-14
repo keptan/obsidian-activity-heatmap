@@ -8,6 +8,12 @@ interface DayData {
 	removed: number;
 }
 
+interface SelectionFileData {
+	path: string;
+	added: number;
+	removed: number;
+}
+
 function localDay(date: Date): string {
 	return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
@@ -97,6 +103,11 @@ export function renderHeatmap(container: HTMLElement, cache: EditHistoryCache, s
 			cell.dataset.day = key;
 			cell.dataset.added = String(data.added);
 			cell.dataset.removed = String(data.removed);
+			cell.dataset.files = JSON.stringify(data.files.map(file => ({
+				path: file.path,
+				added: file.counts[settings.metric].added,
+				removed: file.counts[settings.metric].removed,
+			}) satisfies SelectionFileData));
 			if (data.added + data.removed > 0) setCellStyle(cell, data, settings.theme, max, settings.activityColor);
 			cell.addEventListener('mouseenter', event => showTooltip(event.currentTarget as HTMLElement, tooltipContent(key, data, settings.metric)));
 			cell.addEventListener('mouseleave', hideTooltip);
@@ -139,13 +150,24 @@ function attachDragSelection(container: HTMLElement, metric: Metric): void {
 			const left = Math.min(startX, x), top = Math.min(startY, y), right = Math.max(startX, x), bottom = Math.max(startY, y);
 			box.style.left = `${left}px`; box.style.top = `${top}px`; box.style.width = `${right - left}px`; box.style.height = `${bottom - top}px`;
 			let added = 0, removed = 0, selected = 0;
+			const fileTotals = new Map<string, ChangeCount>();
 			for (const cell of Array.from(container.querySelectorAll<HTMLElement>('[data-day]'))) {
 				const rect = cell.getBoundingClientRect();
 				const hit = rect.right >= left && rect.left <= right && rect.bottom >= top && rect.top <= bottom;
 				cell.toggleClass('is-selected', hit);
-				if (hit) { selected++; added += Number(cell.dataset.added) || 0; removed += Number(cell.dataset.removed) || 0; }
+				if (hit) {
+					selected++;
+					added += Number(cell.dataset.added) || 0;
+					removed += Number(cell.dataset.removed) || 0;
+					for (const file of parseSelectionFiles(cell.dataset.files)) {
+						const total = fileTotals.get(file.path) ?? { added: 0, removed: 0 };
+						total.added += file.added;
+						total.removed += file.removed;
+						fileTotals.set(file.path, total);
+					}
+				}
 			}
-			stats.setText(`${selected} days · +${formatNumber(added)} −${formatNumber(removed)} ${metric}`);
+			renderSelectionStats(stats, selected, added, removed, metric, fileTotals);
 		};
 		const finish = () => {
 			for (const cell of Array.from(container.querySelectorAll<HTMLElement>('.is-selected'))) cell.removeClass('is-selected');
@@ -160,6 +182,44 @@ function attachDragSelection(container: HTMLElement, metric: Metric): void {
 		activeSelectionCleanup = finish;
 		update(startX, startY);
 	});
+}
+
+interface ChangeCount { added: number; removed: number }
+
+function parseSelectionFiles(value: string | undefined): SelectionFileData[] {
+	if (!value) return [];
+	try {
+		const parsed = JSON.parse(value) as unknown;
+		if (!Array.isArray(parsed)) return [];
+		return parsed.filter((item): item is SelectionFileData => {
+			if (!item || typeof item !== 'object') return false;
+			const candidate = item as Partial<SelectionFileData>;
+			return typeof candidate.path === 'string' && typeof candidate.added === 'number' && typeof candidate.removed === 'number';
+		});
+	} catch {
+		return [];
+	}
+}
+
+function renderSelectionStats(
+	stats: HTMLElement,
+	selected: number,
+	added: number,
+	removed: number,
+	metric: Metric,
+	fileTotals: Map<string, ChangeCount>,
+): void {
+	stats.empty();
+	stats.createDiv({ cls: 'edit-heatmap-selection-title', text: `${selected} days · +${formatNumber(added)} −${formatNumber(removed)} ${metric}` });
+	const files = Array.from(fileTotals, ([path, counts]) => ({ path, ...counts }))
+		.sort((a, b) => b.added + b.removed - a.added - a.removed);
+	for (const file of files.slice(0, 20)) {
+		const row = stats.createDiv({ cls: 'edit-heatmap-tooltip-file' });
+		row.createSpan({ cls: 'edit-heatmap-tooltip-path', text: file.path });
+		row.createSpan({ cls: 'edit-heatmap-added', text: `+${formatNumber(file.added)}` });
+		row.createSpan({ cls: 'edit-heatmap-removed', text: `−${formatNumber(file.removed)}` });
+	}
+	if (files.length > 20) stats.createDiv({ cls: 'edit-heatmap-tooltip-more', text: `${files.length - 20} more files` });
 }
 
 export function removeHeatmapOverlays(): void {
