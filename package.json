@@ -1,6 +1,6 @@
 {
 	"name": "obsidian-edit-history-heatmap",
-	"version": "0.1.5",
+	"version": "0.1.6",
 	"description": "Visualize writing activity from Obsidian Sync history.",
 	"main": "main.js",
 	"type": "module",
