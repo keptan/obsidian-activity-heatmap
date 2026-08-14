@@ -53,7 +53,7 @@ export function openScopePicker(anchor: HTMLElement, plugin: EditHistoryPlugin, 
 		update();
 	};
 
-	makeOption(results, 'All .md files', `${plugin.app.vault.getMarkdownFiles().length} files`, () => draft.all, () => {
+	makeOption(results, 'All .md files', `${plugin.getTrackableFileCount()} files`, () => draft.all, () => {
 		draft.all = !draft.all;
 		if (draft.all) { draft.folders = []; draft.tags = []; }
 	});

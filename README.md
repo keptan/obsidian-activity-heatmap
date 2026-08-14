@@ -27,6 +27,7 @@ Put `month` inside the block if you want it to start in month view.
 - The plugin uses an undocumented Obsidian Sync API, so a future Obsidian update could break it.
 - Old note contents are compared in memory and are never saved by the plugin.
 - Only the final available version of each note on each calendar day is compared. Revisions made and undone within the same day are intentionally not counted repeatedly.
+- Excalidraw drawings are excluded, including drawings saved with ordinary `.md` filenames.
 - The cache only contains dates, file paths, version IDs, and aggregate counts. There is no telemetry.
 - The oldest available Sync version is used as a baseline. History that Obsidian Sync no longer retains cannot be recovered.
 - If community plugin settings are included in your Sync configuration, the aggregate cache can be shared between devices.

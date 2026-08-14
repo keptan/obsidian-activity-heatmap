@@ -7,7 +7,7 @@ import { DEFAULT_SETTINGS, type EditHistoryCache, type EditHistorySettings } fro
 import { EditHistoryView, SIDEBAR_SCOPE_KEY, VIEW_TYPE } from './view';
 import { isHeatmapSelectionActive, removeHeatmapOverlays } from './heatmap';
 import { EmbeddedHeatmap } from './embed';
-import { fileMatchesScope, hasScope, resolveScope, type ScopeSelection } from './scope';
+import { fileMatchesScope, hasScope, isTrackableFile, resolveScope, type ScopeSelection } from './scope';
 import { closeScopePicker } from './scope-picker';
 
 interface StoredState {
@@ -207,7 +207,7 @@ export default class EditHistoryPlugin extends Plugin {
 
 	getScopeFolders(): Array<{ path: string; fileCount: number }> {
 		const counts = new Map<string, number>();
-		for (const file of this.app.vault.getMarkdownFiles()) {
+		for (const file of this.app.vault.getMarkdownFiles().filter(file => isTrackableFile(this.app, file))) {
 			const parts = file.path.split('/');
 			parts.pop();
 			for (let depth = 1; depth <= parts.length; depth++) {
@@ -222,7 +222,9 @@ export default class EditHistoryPlugin extends Plugin {
 	}
 
 	getScopeTags(): Array<{ tag: string; fileCount: number }> {
-		const fileTags = this.app.vault.getMarkdownFiles().map(file => new Set(getAllTags(this.app.metadataCache.getFileCache(file) ?? {}) ?? []));
+		const fileTags = this.app.vault.getMarkdownFiles()
+			.filter(file => isTrackableFile(this.app, file))
+			.map(file => new Set(getAllTags(this.app.metadataCache.getFileCache(file) ?? {}) ?? []));
 		const tags = new Set(Array.from(fileTags, tagsForFile => Array.from(tagsForFile)).flat());
 		const counts = new Map<string, number>();
 		for (const tagsForFile of fileTags) {
@@ -242,6 +244,10 @@ export default class EditHistoryPlugin extends Plugin {
 
 	getFilesInScanScope(): TFile[] {
 		return this.app.vault.getMarkdownFiles().filter(file => this.scopePaths.has(file.path));
+	}
+
+	getTrackableFileCount(): number {
+		return this.app.vault.getMarkdownFiles().filter(file => isTrackableFile(this.app, file)).length;
 	}
 
 	getScopePaths(scopeKey: string): ReadonlySet<string> {
