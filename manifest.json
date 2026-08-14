@@ -1,0 +1,10 @@
+{
+	"id": "edit-history-heatmap",
+	"name": "Edit History Heatmap",
+	"version": "0.1.0",
+	"minAppVersion": "1.13.0",
+	"description": "Visualize words, lines, and characters added or removed using Sync history.",
+	"author": "wavey",
+	"authorUrl": "https://github.com/keptan",
+	"isDesktopOnly": false
+}
