@@ -19,6 +19,21 @@ function localDay(date: Date): string {
 	return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
+export function yearWindow(year: number, today = new Date()): { start: Date; end: Date } {
+	const month = today.getMonth();
+	const day = today.getDate();
+	const end = new Date(year, month, Math.min(day, new Date(year, month + 1, 0).getDate()));
+	const startYear = year - 1;
+	const start = new Date(startYear, month, Math.min(day, new Date(startYear, month + 1, 0).getDate()));
+	return { start, end };
+}
+
+export function formatYearWindow(year: number): string {
+	const { start, end } = yearWindow(year);
+	const format = (date: Date) => date.toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
+	return `${format(start)} – ${format(end)}`;
+}
+
 function buildDays(cache: EditHistoryCache, metric: Metric, paths?: ReadonlySet<string>): Map<string, DayData> {
 	const result = new Map<string, DayData>();
 	for (const [day, files] of aggregateByDay(cache, paths)) {
@@ -53,12 +68,13 @@ function formatNumber(value: number): string {
 }
 
 export function wordActivityForPeriod(cache: EditHistoryCache, year: number, month?: number, paths?: ReadonlySet<string>): number {
-	const prefix = month === undefined
-		? `${year}-`
-		: `${year}-${String(month + 1).padStart(2, '0')}-`;
+	const prefix = month === undefined ? null : `${year}-${String(month + 1).padStart(2, '0')}-`;
+	const window = month === undefined ? yearWindow(year) : null;
+	const startDay = window ? localDay(window.start) : '';
+	const endDay = window ? localDay(window.end) : '';
 	let total = 0;
 	for (const [day, files] of aggregateByDay(cache, paths)) {
-		if (!day.startsWith(prefix)) continue;
+		if (prefix ? !day.startsWith(prefix) : day < startDay || day > endDay) continue;
 		for (const file of files) total += file.counts.words.added + file.counts.words.removed;
 	}
 	return total;
@@ -108,32 +124,35 @@ export function renderYearHeatmap(container: HTMLElement, cache: EditHistoryCach
 	container.empty();
 	container.addClass('edit-heatmap');
 	const days = buildDays(cache, settings.metric, paths);
-	const yearPrefix = `${year}-`;
-	const max = maxForRange(days, settings, day => day.startsWith(yearPrefix));
+	const { start, end } = yearWindow(year);
+	const startDay = localDay(start);
+	const endDay = localDay(end);
+	const max = maxForRange(days, settings, day => day >= startDay && day <= endDay);
 	const wrapper = container.createDiv({ cls: 'edit-heatmap-grid-wrapper' });
 	const labels = wrapper.createDiv({ cls: 'edit-heatmap-day-labels' });
 	for (const label of ['', 'Mon', '', 'Wed', '', 'Fri', '']) labels.createDiv({ text: label });
 	const gridArea = wrapper.createDiv({ cls: 'edit-heatmap-grid-area' });
 	const monthRow = gridArea.createDiv({ cls: 'edit-heatmap-months' });
 	const grid = gridArea.createDiv({ cls: 'edit-heatmap-grid' });
-	const cursor = new Date(year, 0, 1);
-	cursor.setDate(cursor.getDate() - cursor.getDay());
-	const end = new Date(year, 11, 31);
-	let week = 0;
-	while (cursor <= end && week < 54) {
-		const previous = new Date(cursor.getTime() - 7 * 86400000);
-		const crossedMonth = week === 0 || cursor.getMonth() !== previous.getMonth();
-		const monthLabel = week === 0 && cursor.getMonth() === 11
-			? ''
-			: crossedMonth ? cursor.toLocaleDateString(undefined, { month: 'short' }) : '';
-		monthRow.createSpan({ cls: 'edit-heatmap-month-label', text: monthLabel });
-		const column = grid.createDiv({ cls: 'edit-heatmap-week' });
-		for (let offset = 0; offset < 7; offset++) {
+	const cursor = new Date(end);
+	cursor.setDate(cursor.getDate() - cursor.getDay() - 52 * 7);
+	for (let week = 0; week < 53; week++) {
+		const columnDates = Array.from({ length: 7 }, (_, offset) => {
 			const date = new Date(cursor);
 			date.setDate(cursor.getDate() + offset);
+			return date;
+		});
+		const validDates = columnDates.filter(date => date >= start && date <= end);
+		const monthStart = week === 0
+			? validDates[0]
+			: validDates.find(date => date.getDate() === 1);
+		const monthLabel = monthStart?.toLocaleDateString(undefined, { month: 'short' }) ?? '';
+		monthRow.createSpan({ cls: 'edit-heatmap-month-label', text: monthLabel });
+		const column = grid.createDiv({ cls: 'edit-heatmap-week' });
+		for (const date of columnDates) {
 			const key = localDay(date);
 			const cell = column.createDiv({ cls: 'edit-heatmap-cell' });
-			if (date.getFullYear() !== year) {
+			if (date < start || date > end) {
 				cell.addClass('is-outside');
 				continue;
 			}
@@ -141,7 +160,6 @@ export function renderYearHeatmap(container: HTMLElement, cache: EditHistoryCach
 			setupCell(cell, key, data, settings, max);
 		}
 		cursor.setDate(cursor.getDate() + 7);
-		week++;
 	}
 	attachDragSelection(container, settings.metric);
 }

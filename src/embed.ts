@@ -1,6 +1,6 @@
 import { MarkdownRenderChild } from 'obsidian';
 import type EditHistoryPlugin from './main';
-import { makeIconButton, renderMonthHeatmap, renderYearHeatmap, wordActivityForPeriod } from './heatmap';
+import { formatYearWindow, makeIconButton, renderMonthHeatmap, renderYearHeatmap, wordActivityForPeriod } from './heatmap';
 import { renderHeatmapControls } from './controls';
 import { openScopePicker, scopeLabel } from './scope-picker';
 
@@ -48,7 +48,7 @@ export class EmbeddedHeatmap extends MarkdownRenderChild {
 		yearButton.toggleClass('is-active', this.mode === 'year');
 		monthButton.toggleClass('is-active', this.mode === 'month');
 
-		if (this.mode === 'year') label.setText(String(this.year));
+		if (this.mode === 'year') label.setText(formatYearWindow(this.year));
 		else label.setText(new Date(this.year, this.month, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' }));
 		previous.addEventListener('click', () => { this.shift(-1); this.render(); });
 		next.addEventListener('click', () => {

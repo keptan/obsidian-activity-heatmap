@@ -1,6 +1,6 @@
 {
 	"name": "obsidian-edit-history-heatmap",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"description": "Visualize writing activity from Obsidian Sync history.",
 	"main": "main.js",
 	"type": "module",
@@ -11,7 +11,13 @@
 		"lint": "eslint .",
 		"test": "node test/run-tests.mjs"
 	},
-	"keywords": ["obsidian", "heatmap", "writing", "history", "sync"],
+	"keywords": [
+		"obsidian",
+		"heatmap",
+		"writing",
+		"history",
+		"sync"
+	],
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/keptan/obsidian-activity-heatmap.git"
@@ -36,5 +42,7 @@
 		"typescript": "^5.8.3",
 		"typescript-eslint": "^8.59.1"
 	},
-	"allowScripts": { "esbuild@0.25.5": true }
+	"allowScripts": {
+		"esbuild@0.25.5": true
+	}
 }

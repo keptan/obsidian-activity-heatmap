@@ -9,7 +9,7 @@ Choose folders and tags, switch between month and year views, and measure activi
 
 ## Features
 
-- Month calendar in the sidebar and responsive month/year heatmaps in notes.
+- Month calendar in the sidebar and responsive month/year heatmaps in notes. Year view shows a rolling year ending on the selected date, like GitHub's contribution graph.
 - Word, line, and character measurements.
 - Activity heatmap or green-addition/red-removal theme.
 - Multi-select scopes made from any combination of folders and tags.
