@@ -13,6 +13,7 @@ export interface ImportProgress {
 
 export class HistoryIndexer {
 	private cancelled = false;
+	private readonly versionReadConcurrency = 24;
 
 	constructor(private client: SyncHistoryClient, private cache: EditHistoryCache) {}
 
@@ -28,21 +29,21 @@ export class HistoryIndexer {
 		const incremental = Boolean(checkpoint && result.foundStop);
 		if (!incremental) removeFileTransitions(this.cache, file.path);
 		const chronological = [...result.versions].reverse();
-		let previous = '';
 		let startIndex = 0;
-		if (incremental || chronological.length > 0) {
-			const anchor = chronological[0];
-			if (!anchor) return 0;
-			previous = await this.client.readVersion(anchor.uid);
-			startIndex = 1;
-		}
+		const anchor = chronological[0];
+		if (!anchor) return 0;
+		const readable = chronological.filter((version, index) => index === 0 || (!version.deleted && !version.folder));
+		const contents = await this.readVersions(readable);
+		let previous = contents.get(anchor.uid) ?? '';
+		startIndex = 1;
 
 		let processed = 0;
 		for (let index = startIndex; index < chronological.length; index++) {
 			if (this.cancelled) break;
 			const version = chronological[index];
 			if (!version || version.deleted || version.folder) continue;
-			const current = await this.client.readVersion(version.uid);
+			const current = contents.get(version.uid);
+			if (current === undefined) continue;
 			const id = transitionId(version.uid);
 			this.cache.transitions[id] = makeTransition(id, file.path, version.ts, calculateMetrics(previous, current));
 			previous = current;
@@ -58,6 +59,23 @@ export class HistoryIndexer {
 			};
 		}
 		return processed;
+	}
+
+	private async readVersions(versions: Array<{ uid: number }>): Promise<Map<number, string>> {
+		const contents = new Map<number, string>();
+		let nextIndex = 0;
+		const worker = async () => {
+			while (!this.cancelled) {
+				const version = versions[nextIndex++];
+				if (!version) return;
+				contents.set(version.uid, await this.client.readVersion(version.uid));
+			}
+		};
+		await Promise.all(Array.from(
+			{ length: Math.min(this.versionReadConcurrency, versions.length) },
+			() => worker(),
+		));
+		return contents;
 	}
 
 	async indexFiles(files: TFile[], concurrency: number, onProgress: (progress: ImportProgress) => void): Promise<number> {

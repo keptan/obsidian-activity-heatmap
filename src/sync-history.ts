@@ -31,7 +31,8 @@ interface AppWithSync extends App {
 export class SyncHistoryClient {
 	private requestQueue: Promise<void> = Promise.resolve();
 	private lastRequestAt = 0;
-	private readonly minimumRequestIntervalMs = 75;
+	private adaptiveRequestIntervalMs = 25;
+	private readonly requestTimeoutMs = 15_000;
 
 	constructor(private app: App) {}
 
@@ -74,7 +75,7 @@ export class SyncHistoryClient {
 		const previous = this.requestQueue;
 		this.requestQueue = new Promise<void>(resolve => { release = resolve; });
 		await previous;
-		const wait = Math.max(0, this.minimumRequestIntervalMs - (Date.now() - this.lastRequestAt));
+		const wait = Math.max(0, this.adaptiveRequestIntervalMs - (Date.now() - this.lastRequestAt));
 		if (wait > 0) await new Promise(resolve => window.setTimeout(resolve, wait));
 		this.lastRequestAt = Date.now();
 		release();
@@ -82,13 +83,30 @@ export class SyncHistoryClient {
 		let delay = 250;
 		for (let attempt = 0; attempt < 4; attempt++) {
 			try {
-				return await operation();
+				const result = await this.withTimeout(operation());
+				this.adaptiveRequestIntervalMs = Math.max(25, Math.floor(this.adaptiveRequestIntervalMs * 0.9));
+				return result;
 			} catch (error) {
+				this.adaptiveRequestIntervalMs = Math.min(1_000, Math.max(50, this.adaptiveRequestIntervalMs * 2));
 				if (attempt === 3) throw error;
 				await new Promise(resolve => window.setTimeout(resolve, delay));
 				delay *= 2;
 			}
 		}
 		throw new Error('Sync request failed');
+	}
+
+	private async withTimeout<T>(operation: Promise<T>): Promise<T> {
+		let timeout = 0;
+		try {
+			return await Promise.race([
+				operation,
+				new Promise<T>((_resolve, reject) => {
+					timeout = window.setTimeout(() => reject(new Error('Obsidian Sync request timed out')), this.requestTimeoutMs);
+				}),
+			]);
+		} finally {
+			window.clearTimeout(timeout);
+		}
 	}
 }
