@@ -29,6 +29,7 @@ export interface FileCheckpoint {
 export interface EditHistoryCache {
 	schemaVersion: 1;
 	trackingStartedAt: number;
+	clearedAt: number;
 	transitions: Record<string, CachedTransition>;
 	checkpoints: Record<string, FileCheckpoint>;
 }
@@ -38,6 +39,7 @@ export interface EditHistorySettings {
 	metric: Metric;
 	activityColor: string;
 	maxConcurrentFiles: number;
+	scanFolder: string;
 }
 
 export const DEFAULT_SETTINGS: EditHistorySettings = {
@@ -45,6 +47,7 @@ export const DEFAULT_SETTINGS: EditHistorySettings = {
 	metric: 'lines',
 	activityColor: '#7c5cff',
 	maxConcurrentFiles: 2,
+	scanFolder: '',
 };
 
 export function emptyCounts(): MetricCounts {

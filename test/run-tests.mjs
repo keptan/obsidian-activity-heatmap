@@ -39,7 +39,7 @@ const client = {
 	},
 	async readVersion(uid) { return content.get(uid); },
 };
-const cache = { schemaVersion: 1, trackingStartedAt: 0, transitions: {}, checkpoints: {} };
+const cache = { schemaVersion: 1, trackingStartedAt: 0, clearedAt: 0, transitions: {}, checkpoints: {} };
 const file = { path: 'Note.md', stat: { mtime: 10 } };
 const indexer = new HistoryIndexer(client, cache);
 assert.equal(await indexer.indexFile(file, true), 2);

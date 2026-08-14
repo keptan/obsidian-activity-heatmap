@@ -79,7 +79,7 @@ export default class EditHistoryPlugin extends Plugin {
 		this.statusText = 'Preparing historical import…';
 		this.refreshViews();
 		this.indexer = new HistoryIndexer(this.client, this.cache);
-		const files = this.app.vault.getMarkdownFiles();
+		const files = this.getFilesInScanScope();
 		try {
 			const versions = await this.indexer.indexFiles(files, this.settings.maxConcurrentFiles, progress => {
 				this.statusText = `${progress.completedFiles}/${progress.totalFiles} files · ${progress.versions} versions · ${progress.currentPath}`;
@@ -94,6 +94,33 @@ export default class EditHistoryPlugin extends Plugin {
 			await this.saveState();
 			this.refreshViews();
 		}
+	}
+
+	getScanFolders(): string[] {
+		return this.app.vault.getAllFolders()
+			.map(folder => folder.path)
+			.filter(path => path.length > 0)
+			.sort((a, b) => a.localeCompare(b));
+	}
+
+	getFilesInScanScope(): TFile[] {
+		const folder = this.settings.scanFolder;
+		if (!folder) return this.app.vault.getMarkdownFiles();
+		const prefix = `${folder}/`;
+		return this.app.vault.getMarkdownFiles().filter(file => file.path.startsWith(prefix));
+	}
+
+	async clearCache(): Promise<void> {
+		if (this.isImporting) {
+			new Notice('Cancel the active history scan before clearing the cache.');
+			return;
+		}
+		this.cache = createCache();
+		this.cache.clearedAt = Date.now();
+		this.statusText = 'Cache cleared';
+		await this.saveState();
+		this.refreshViews();
+		new Notice('Edit history cache cleared.');
 	}
 
 	cancelImport(): void {

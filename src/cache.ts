@@ -2,10 +2,14 @@ import type { CachedTransition, EditHistoryCache, FileCheckpoint, MetricCounts }
 import { emptyCounts } from './types';
 
 export function createCache(now = Date.now()): EditHistoryCache {
-	return { schemaVersion: 1, trackingStartedAt: now, transitions: {}, checkpoints: {} };
+	return { schemaVersion: 1, trackingStartedAt: now, clearedAt: 0, transitions: {}, checkpoints: {} };
 }
 
 export function mergeCaches(local: EditHistoryCache, remote: EditHistoryCache): EditHistoryCache {
+	const localClearedAt = local.clearedAt ?? 0;
+	const remoteClearedAt = remote.clearedAt ?? 0;
+	if (localClearedAt > remoteClearedAt) return local;
+	if (remoteClearedAt > localClearedAt) return remote;
 	const checkpoints: Record<string, FileCheckpoint> = { ...local.checkpoints };
 	for (const [path, checkpoint] of Object.entries(remote.checkpoints)) {
 		if (!checkpoints[path] || checkpoint.newestTimestamp > checkpoints[path].newestTimestamp) checkpoints[path] = checkpoint;
@@ -13,6 +17,7 @@ export function mergeCaches(local: EditHistoryCache, remote: EditHistoryCache): 
 	return {
 		schemaVersion: 1,
 		trackingStartedAt: Math.min(local.trackingStartedAt, remote.trackingStartedAt),
+		clearedAt: localClearedAt,
 		transitions: { ...local.transitions, ...remote.transitions },
 		checkpoints,
 	};

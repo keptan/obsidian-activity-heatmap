@@ -1,6 +1,7 @@
 import { ItemView, Notice, Setting, type WorkspaceLeaf } from 'obsidian';
 import type EditHistoryPlugin from './main';
 import { makeIconButton, renderHeatmap } from './heatmap';
+import { ConfirmClearCacheModal } from './confirm-clear-modal';
 
 export const VIEW_TYPE = 'edit-history-heatmap-view';
 
@@ -68,10 +69,20 @@ export class EditHistoryView extends ItemView {
 					this.render();
 				}));
 		new Setting(panel)
+			.setName('Scan vault history')
+			.addDropdown(dropdown => {
+				dropdown.addOption('', 'Entire vault');
+				for (const folder of this.plugin.getScanFolders()) dropdown.addOption(folder, folder);
+				dropdown.setValue(this.plugin.settings.scanFolder).onChange(async value => {
+					this.plugin.settings.scanFolder = value;
+					await this.plugin.saveState();
+				});
+			});
+		new Setting(panel)
 			.setName('Historical cache')
 			.setDesc('Import sync snapshots. Note contents are processed in memory and discarded.')
 			.addButton(button => button
-				.setButtonText(this.plugin.isImporting ? 'Cancel import' : 'Import history')
+				.setButtonText(this.plugin.isImporting ? 'Cancel scan' : 'Scan history')
 				.onClick(() => {
 					if (this.plugin.isImporting) this.plugin.cancelImport();
 					else void this.plugin.importAllHistory().catch(error => {
@@ -80,5 +91,12 @@ export class EditHistoryView extends ItemView {
 					});
 					this.render();
 				}));
+		new Setting(panel)
+			.setName('Clear cache')
+			.setDesc('Remove imported aggregate counts and checkpoints.')
+			.addButton(button => button
+				.setButtonText('Clear cache')
+				.setDestructive()
+				.onClick(() => new ConfirmClearCacheModal(this.plugin).open()));
 	}
 }
