@@ -38,13 +38,12 @@ function percentileMax(days: Map<string, DayData>, selector: (day: DayData) => n
 	return values[Math.min(values.length - 1, Math.floor(values.length * 0.9))] ?? 1;
 }
 
-function setCellStyle(cell: HTMLElement, day: DayData, theme: HeatmapTheme, max: number, color: string): void {
+function setCellStyle(cell: HTMLElement, day: DayData, theme: HeatmapTheme, max: number): void {
 	if (theme === 'changes') {
 		cell.classList.add('edit-heatmap-cell-changes');
 		cell.style.setProperty('--edit-add-mix', `${Math.round(Math.min(1, day.added / max) * 90)}%`);
 		cell.style.setProperty('--edit-remove-mix', `${Math.round(Math.min(1, day.removed / max) * 90)}%`);
 	} else {
-		cell.style.setProperty('--edit-activity-color', color);
 		cell.style.setProperty('--edit-activity-mix', `${Math.round(Math.min(1, (day.added + day.removed) / max) * 82)}%`);
 	}
 }
@@ -95,7 +94,7 @@ function setupCell(cell: HTMLElement, key: string, data: DayData, settings: Edit
 		added: file.counts[settings.metric].added,
 		removed: file.counts[settings.metric].removed,
 	}) satisfies SelectionFileData));
-	if (data.added + data.removed > 0) setCellStyle(cell, data, settings.theme, max, settings.activityColor);
+	if (data.added + data.removed > 0) setCellStyle(cell, data, settings.theme, max);
 	cell.addEventListener('mouseenter', event => showTooltip(event.currentTarget as HTMLElement, tooltipContent(key, data, settings.metric)));
 	cell.addEventListener('mouseleave', hideTooltip);
 }

@@ -120,18 +120,15 @@
 	box-shadow: var(--shadow-s);
 }
 
-.edit-heatmap-scope-picker .search-input-container {
-	width: 100%;
-	margin-bottom: 6px;
-}
-
 .edit-heatmap-scope-results {
-	max-height: 340px;
+	max-height: 400px;
 	overflow-y: auto;
 }
 
 .edit-heatmap-scope-option {
-	display: block;
+	display: flex;
+	align-items: center;
+	gap: 8px;
 	width: 100%;
 	padding: 7px 8px;
 	border: 0;
@@ -141,6 +138,36 @@
 	color: var(--text-normal);
 	font-size: var(--font-ui-small);
 	text-align: left;
+}
+
+.edit-heatmap-scope-option.is-selected {
+	background: var(--background-modifier-hover);
+	color: var(--interactive-accent);
+}
+
+.edit-heatmap-scope-check {
+	display: inline-flex;
+	width: 18px;
+	flex: 0 0 18px;
+}
+
+.edit-heatmap-scope-check svg {
+	width: 16px;
+	height: 16px;
+}
+
+.edit-heatmap-scope-copy {
+	min-width: 0;
+	flex: 1;
+}
+
+.edit-heatmap-scope-section {
+	padding: 10px 8px 4px;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	font-weight: 600;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
 }
 
 .edit-heatmap-scope-option:hover {
@@ -154,8 +181,7 @@
 	white-space: nowrap;
 }
 
-.edit-heatmap-scope-option-description,
-.edit-heatmap-scope-empty {
+.edit-heatmap-scope-option-description {
 	color: var(--text-muted);
 	font-size: var(--font-ui-smaller);
 }
@@ -186,20 +212,6 @@
 	border: 1px solid var(--background-modifier-border);
 	border-radius: var(--radius-m);
 	background: var(--background-secondary);
-}
-
-.edit-heatmap-status {
-	min-height: 20px;
-	margin: 8px 0;
-	color: var(--text-muted);
-	font-size: var(--font-ui-smaller);
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.edit-heatmap-status.is-hidden {
-	display: none;
 }
 
 .edit-heatmap-grid-wrapper {

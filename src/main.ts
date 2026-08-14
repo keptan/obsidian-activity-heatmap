@@ -1,4 +1,4 @@
-import { Notice, Plugin, TFile } from 'obsidian';
+import { getAllTags, Notice, Plugin, TFile } from 'obsidian';
 import { createCache, mergeCaches, renameCachedFile } from './cache';
 import { HistoryIndexer } from './indexer';
 import { EditHistorySettingTab } from './settings';
@@ -7,11 +7,11 @@ import { DEFAULT_SETTINGS, type EditHistoryCache, type EditHistorySettings } fro
 import { EditHistoryView, VIEW_TYPE } from './view';
 import { removeHeatmapOverlays } from './heatmap';
 import { EmbeddedHeatmap } from './embed';
-import { fileMatchesQuery, resolveScope, type ScopeSelection } from './scope';
+import { fileMatchesScope, hasScope, resolveScope, type ScopeSelection } from './scope';
 import { closeScopePicker } from './scope-picker';
 
 interface StoredState {
-	settings?: Partial<EditHistorySettings>;
+	settings?: Partial<EditHistorySettings> & { scopeType?: string; scopeValue?: string };
 	cache?: EditHistoryCache;
 }
 
@@ -28,6 +28,8 @@ export default class EditHistoryPlugin extends Plugin {
 	private scopePaths = new Set<string>();
 	private statusBarEl!: HTMLElement;
 	private statusClearTimer: number | null = null;
+	private cancelRequested = false;
+	private restartScanRequested = false;
 
 	async onload(): Promise<void> {
 		await this.loadState();
@@ -67,7 +69,7 @@ export default class EditHistoryPlugin extends Plugin {
 		if (this.saveTimer !== null) window.clearTimeout(this.saveTimer);
 		if (this.statusClearTimer !== null) window.clearTimeout(this.statusClearTimer);
 		removeHeatmapOverlays();
-		closeScopePicker();
+		closeScopePicker(false);
 	}
 
 	async activateView(): Promise<void> {
@@ -96,15 +98,19 @@ export default class EditHistoryPlugin extends Plugin {
 			new Notice('Enable Obsidian Sync before importing history.');
 			return;
 		}
-		if (this.settings.scopeType === 'none') {
-			new Notice('Choose a folder or query from a heatmap first.');
+		if (!hasScope(this.currentScope())) {
+			new Notice('Choose at least one folder or tag from a heatmap first.');
 			return;
 		}
 		this.isImporting = true;
+		this.cancelRequested = false;
 		this.setStatus('Preparing historical import…');
 		this.refreshViews();
 		this.indexer = new HistoryIndexer(this.client, this.cache);
-		const files = this.getFilesInScanScope().filter(file => !this.cache.checkpoints[file.path]);
+		const files = this.getFilesInScanScope().filter(file => {
+			const checkpoint = this.cache.checkpoints[file.path];
+			return !checkpoint || file.stat.mtime > checkpoint.mtime;
+		});
 		if (files.length === 0) {
 			this.isImporting = false;
 			this.indexer = null;
@@ -114,22 +120,29 @@ export default class EditHistoryPlugin extends Plugin {
 			return;
 		}
 		try {
-			const versions = await this.indexer.indexFiles(files, this.settings.maxConcurrentFiles, progress => {
+			const versions = await this.indexer.indexFiles(files, 2, progress => {
 				this.setStatus(`${progress.completedFiles}/${progress.totalFiles} files · ${progress.versions} versions · ${progress.currentPath}`);
 				if (progress.completedFiles % 100 === 0) void this.saveState();
 			});
-			this.setStatus(`Imported ${versions} versions across ${files.length} files`);
-			new Notice(this.statusText);
+			if (this.cancelRequested) {
+				this.setStatus('History scan paused');
+			} else {
+				this.setStatus(`Imported ${versions} versions across ${files.length} files`);
+				new Notice(this.statusText);
+			}
 		} finally {
+			const restart = this.restartScanRequested;
+			this.restartScanRequested = false;
 			this.isImporting = false;
 			this.indexer = null;
 			await this.saveState();
 			this.refreshViews();
-			this.scheduleStatusClear();
+			if (!restart) this.scheduleStatusClear();
+			if (restart) void this.importAllHistory().catch(error => console.error('Edit History Heatmap: Deferred scope import failed', error));
 		}
 	}
 
-	getScanFolders(): Array<{ path: string; fileCount: number }> {
+	getScopeFolders(): Array<{ path: string; fileCount: number }> {
 		const counts = new Map<string, number>();
 		for (const file of this.app.vault.getMarkdownFiles()) {
 			const parts = file.path.split('/');
@@ -145,30 +158,64 @@ export default class EditHistoryPlugin extends Plugin {
 			.sort((a, b) => b.fileCount - a.fileCount || a.path.localeCompare(b.path));
 	}
 
+	getScopeTags(): Array<{ tag: string; fileCount: number }> {
+		const fileTags = this.app.vault.getMarkdownFiles().map(file => new Set(getAllTags(this.app.metadataCache.getFileCache(file) ?? {}) ?? []));
+		const tags = new Set(Array.from(fileTags, tagsForFile => Array.from(tagsForFile)).flat());
+		const counts = new Map<string, number>();
+		for (const tagsForFile of fileTags) {
+			const matched = new Set<string>();
+			for (const fileTag of tagsForFile) {
+				const parts = fileTag.split('/');
+				for (let depth = 1; depth <= parts.length; depth++) {
+					const candidate = parts.slice(0, depth).join('/');
+					if (tags.has(candidate)) matched.add(candidate);
+				}
+			}
+			for (const tag of matched) counts.set(tag, (counts.get(tag) ?? 0) + 1);
+		}
+		return Array.from(tags, tag => ({ tag, fileCount: counts.get(tag) ?? 0 }))
+			.sort((a, b) => b.fileCount - a.fileCount || a.tag.localeCompare(b.tag));
+	}
+
 	getFilesInScanScope(): TFile[] {
 		return this.app.vault.getMarkdownFiles().filter(file => this.scopePaths.has(file.path));
 	}
 
 	getScopePaths(): ReadonlySet<string> { return this.scopePaths; }
 
-	async selectScope(scope: ScopeSelection): Promise<void> {
-		this.settings.scopeType = scope.type;
-		this.settings.scopeValue = scope.value;
-		const files = await resolveScope(this.app, scope.type, scope.value);
+	beginScopeEditing(): void {
+		if (this.isImporting) this.cancelImport();
+	}
+
+	async applyScope(scope: ScopeSelection): Promise<void> {
+		this.settings.scopeAll = scope.all;
+		this.settings.scopeFolders = [...scope.folders];
+		this.settings.scopeTags = [...scope.tags];
+		const files = resolveScope(this.app, scope);
 		this.scopePaths = new Set(files.map(file => file.path));
 		await this.saveState();
 		this.setStatus(`${files.length} files in scope`);
 		this.refreshViews();
-		void this.importAllHistory().catch(error => console.error('Edit History Heatmap: Scope import failed', error));
+		if (!hasScope(scope)) {
+			this.restartScanRequested = false;
+			this.setStatus(this.isImporting ? 'History scan paused' : 'Ready');
+			return;
+		}
+		if (this.isImporting) {
+			this.restartScanRequested = true;
+			this.setStatus('Waiting to scan adjusted scope…');
+		} else {
+			void this.importAllHistory().catch(error => console.error('Edit History Heatmap: Scope import failed', error));
+		}
 	}
 
 	private async loadSelectedScope(): Promise<void> {
-		if (this.settings.scopeType === 'none') {
+		if (!hasScope(this.currentScope())) {
 			this.scopePaths.clear();
 			this.refreshViews();
 			return;
 		}
-		const files = await resolveScope(this.app, this.settings.scopeType, this.settings.scopeValue);
+		const files = resolveScope(this.app, this.currentScope());
 		this.scopePaths = new Set(files.map(file => file.path));
 		this.refreshViews();
 	}
@@ -188,12 +235,13 @@ export default class EditHistoryPlugin extends Plugin {
 	}
 
 	cancelImport(): void {
+		this.cancelRequested = true;
 		this.indexer?.cancel();
 		this.setStatus('Cancelling after current requests…');
 	}
 
 	private scheduleFileIndex(file: TFile): void {
-		if (this.settings.scopeType === 'none') return;
+		if (!hasScope(this.currentScope())) return;
 		const existing = this.editTimers.get(file.path);
 		if (existing !== undefined) window.clearTimeout(existing);
 		this.editTimers.set(file.path, window.setTimeout(() => {
@@ -203,17 +251,8 @@ export default class EditHistoryPlugin extends Plugin {
 	}
 
 	private async refreshScopeAndIndexFile(file: TFile): Promise<void> {
-		if (this.settings.scopeType === 'all') {
-			this.scopePaths.add(file.path);
-		} else if (this.settings.scopeType === 'folder') {
-			const prefix = `${this.settings.scopeValue.replace(/\/$/, '')}/`;
-			if (file.path.startsWith(prefix)) this.scopePaths.add(file.path);
-			else this.scopePaths.delete(file.path);
-		} else if (this.settings.scopeType === 'query') {
-			const matches = await fileMatchesQuery(this.app, file, this.settings.scopeValue);
-			if (matches) this.scopePaths.add(file.path);
-			else this.scopePaths.delete(file.path);
-		}
+		if (fileMatchesScope(this.app, file, this.currentScope())) this.scopePaths.add(file.path);
+		else this.scopePaths.delete(file.path);
 		await this.indexFile(file);
 	}
 
@@ -233,7 +272,7 @@ export default class EditHistoryPlugin extends Plugin {
 	}
 
 	private async reconcileChangedFiles(): Promise<void> {
-		if (this.isImporting || !this.client.isAvailable() || this.settings.scopeType === 'none') return;
+		if (this.isImporting || !this.client.isAvailable() || !hasScope(this.currentScope())) return;
 		const changed = this.getFilesInScanScope().filter(file => {
 			const checkpoint = this.cache.checkpoints[file.path];
 			return checkpoint ? file.stat.mtime > checkpoint.mtime : file.stat.mtime >= this.cache.trackingStartedAt;
@@ -243,8 +282,29 @@ export default class EditHistoryPlugin extends Plugin {
 
 	private async loadState(): Promise<void> {
 		const stored = await this.loadData() as StoredState | null;
-		this.settings = { ...DEFAULT_SETTINGS, ...stored?.settings };
+		this.settings = this.normalizeSettings(stored?.settings);
 		if (stored?.cache?.schemaVersion === 1) this.cache = stored.cache;
+	}
+
+	private currentScope(): ScopeSelection {
+		return {
+			all: this.settings.scopeAll,
+			folders: this.settings.scopeFolders,
+			tags: this.settings.scopeTags,
+		};
+	}
+
+	private normalizeSettings(stored?: StoredState['settings']): EditHistorySettings {
+		const legacyFolders = !stored?.scopeFolders && stored?.scopeType === 'folder' && stored.scopeValue
+			? [stored.scopeValue]
+			: [];
+		return {
+			theme: stored?.theme ?? DEFAULT_SETTINGS.theme,
+			metric: stored?.metric ?? DEFAULT_SETTINGS.metric,
+			scopeAll: stored?.scopeAll ?? (!stored?.scopeFolders && stored?.scopeType === 'all'),
+			scopeFolders: stored?.scopeFolders ?? legacyFolders,
+			scopeTags: stored?.scopeTags ?? [],
+		};
 	}
 
 	async saveState(): Promise<void> {
@@ -256,6 +316,10 @@ export default class EditHistoryPlugin extends Plugin {
 	}
 
 	private setStatus(text: string): void {
+		if (text !== 'Ready' && this.statusClearTimer !== null) {
+			window.clearTimeout(this.statusClearTimer);
+			this.statusClearTimer = null;
+		}
 		this.statusText = text;
 		this.updateStatusBar();
 	}
@@ -285,7 +349,7 @@ export default class EditHistoryPlugin extends Plugin {
 	async onExternalSettingsChange(): Promise<void> {
 		const stored = await this.loadData() as StoredState | null;
 		if (stored?.cache?.schemaVersion === 1) this.cache = mergeCaches(this.cache, stored.cache);
-		if (stored?.settings) this.settings = { ...this.settings, ...stored.settings };
+		if (stored?.settings) this.settings = this.normalizeSettings(stored.settings);
 		await this.saveState();
 		await this.loadSelectedScope();
 	}

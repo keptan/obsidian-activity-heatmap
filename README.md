@@ -17,7 +17,9 @@ This plugin is in early development. It uses private Obsidian Sync APIs, which m
 
 ## Usage
 
-Open **Edit history heatmap: Open heatmap**, then select **Import history** for the initial historical scan. Later updates are discovered from vault events and lightweight file metadata reconciliation.
+Open **Edit history heatmap: Open heatmap**, then choose **Scope**. Select any combination of folders and tags, or explicitly select **All .md files**. Folder and tag counts include matching files in nested folders and tags. The scope is saved across restarts, and history scanning begins after the scope menu closes. Opening the scope menu pauses an active scan so the selection can be adjusted safely.
+
+No history is scanned until a scope is explicitly selected. Later updates inside the selected scope are discovered from vault events and lightweight file metadata reconciliation.
 
 The sidebar uses a month calendar. To embed a heatmap with year/month controls in a note, add:
 
