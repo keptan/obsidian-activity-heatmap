@@ -214,6 +214,31 @@
 	background: var(--background-secondary);
 }
 
+.edit-heatmap-content.slide-left {
+	animation: edit-heatmap-slide-left 0.25s ease;
+}
+
+@keyframes edit-heatmap-slide-left {
+	from { opacity: 0; transform: translateX(30px); }
+	to { opacity: 1; transform: translateX(0); }
+}
+
+.edit-heatmap-content.slide-right {
+	animation: edit-heatmap-slide-right 0.25s ease;
+}
+
+@keyframes edit-heatmap-slide-right {
+	from { opacity: 0; transform: translateX(-30px); }
+	to { opacity: 1; transform: translateX(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.edit-heatmap-content.slide-left,
+	.edit-heatmap-content.slide-right {
+		animation: none;
+	}
+}
+
 .edit-heatmap-grid-wrapper {
 	display: flex;
 	gap: 3px;

@@ -11,6 +11,7 @@ export class EmbeddedHeatmap extends MarkdownRenderChild {
 	private year = new Date().getFullYear();
 	private month = new Date().getMonth();
 	private controlsVisible = false;
+	private slideDirection: 'left' | 'right' | 'none' = 'none';
 
 	constructor(container: HTMLElement, private plugin: EditHistoryPlugin, source: string) {
 		super(container);
@@ -37,6 +38,8 @@ export class EmbeddedHeatmap extends MarkdownRenderChild {
 	}
 
 	render(): void {
+		const slideDirection = this.slideDirection;
+		this.slideDirection = 'none';
 		this.containerEl.empty();
 		this.containerEl.addClass('edit-heatmap-embed');
 		const header = this.containerEl.createDiv({ cls: 'edit-heatmap-header edit-heatmap-embed-header' });
@@ -60,9 +63,9 @@ export class EmbeddedHeatmap extends MarkdownRenderChild {
 
 		if (this.mode === 'year') label.setText(formatYearWindow(this.year));
 		else label.setText(new Date(this.year, this.month, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' }));
-		previous.addEventListener('click', () => { this.shift(-1); this.render(); });
+		previous.addEventListener('click', () => { this.shift(-1); this.slideDirection = 'right'; this.render(); });
 		next.addEventListener('click', () => {
-			if (this.canMoveForward()) { this.shift(1); this.render(); }
+			if (this.canMoveForward()) { this.shift(1); this.slideDirection = 'left'; this.render(); }
 		});
 		yearButton.addEventListener('click', () => { this.mode = 'year'; this.render(); });
 		monthButton.addEventListener('click', () => { this.mode = 'month'; this.render(); });
@@ -73,7 +76,8 @@ export class EmbeddedHeatmap extends MarkdownRenderChild {
 			renderHeatmapControls(panel, this.plugin, () => this.render());
 		}
 
-		const heatmap = this.containerEl.createDiv();
+		const heatmap = this.containerEl.createDiv({ cls: 'edit-heatmap-content' });
+		if (slideDirection !== 'none') heatmap.addClass(`slide-${slideDirection}`);
 		if (this.mode === 'year') renderYearHeatmap(heatmap, this.plugin.cache, this.plugin.settings, this.year, this.plugin.getScopePaths());
 		else renderMonthHeatmap(heatmap, this.plugin.cache, this.plugin.settings, this.year, this.month, this.plugin.getScopePaths());
 	}
