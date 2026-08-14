@@ -4,7 +4,7 @@ See when you write. Edit History Heatmap turns your Obsidian Sync version histor
 
 ![A year of writing activity shown as a purple contribution heatmap](./images/edit-history-heatmap.png)
 
-It can track words, lines, or characters, and show either total activity or additions and removals separately. Hover over a day for the file breakdown, or drag across several days to total them up.
+It tracks the daily net change in words, lines, or characters, and can show either total change or additions and removals separately. Hover over a day for the file breakdown, or drag across several days to total them up.
 
 ## Using it
 
@@ -26,6 +26,7 @@ Put `month` inside the block if you want it to start in month view.
 - Obsidian Sync is required. Other sync services do not provide the version history this plugin needs.
 - The plugin uses an undocumented Obsidian Sync API, so a future Obsidian update could break it.
 - Old note contents are compared in memory and are never saved by the plugin.
+- Only the final available version of each note on each calendar day is compared. Revisions made and undone within the same day are intentionally not counted repeatedly.
 - The cache only contains dates, file paths, version IDs, and aggregate counts. There is no telemetry.
 - The oldest available Sync version is used as a baseline. History that Obsidian Sync no longer retains cannot be recovered.
 - If community plugin settings are included in your Sync configuration, the aggregate cache can be shared between devices.

@@ -364,7 +364,7 @@ export default class EditHistoryPlugin extends Plugin {
 		const stored = await this.loadData() as StoredState | null;
 		this.settings = this.normalizeSettings(stored?.settings);
 		this.viewScopes = this.normalizeViewScopes(stored?.viewScopes);
-		if (stored?.cache?.schemaVersion === 1) this.cache = stored.cache;
+		if (stored?.cache?.schemaVersion === 2) this.cache = stored.cache;
 	}
 
 	private activeScopeKeys(): string[] {
@@ -470,7 +470,7 @@ export default class EditHistoryPlugin extends Plugin {
 
 	async onExternalSettingsChange(): Promise<void> {
 		const stored = await this.loadData() as StoredState | null;
-		if (stored?.cache?.schemaVersion === 1) this.cache = mergeCaches(this.cache, stored.cache);
+		if (stored?.cache?.schemaVersion === 2) this.cache = mergeCaches(this.cache, stored.cache);
 		if (stored?.settings) this.settings = this.normalizeSettings(stored.settings);
 		if (stored?.viewScopes) this.viewScopes = this.normalizeViewScopes(stored.viewScopes);
 		await this.saveState();

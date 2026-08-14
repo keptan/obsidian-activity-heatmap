@@ -14,7 +14,7 @@ export interface ImportProgress {
 
 export class HistoryIndexer {
 	private cancelled = false;
-	private readonly versionReadConcurrency = 24;
+	private readonly versionReadConcurrency = 6;
 
 	constructor(private client: SyncHistoryClient, private cache: EditHistoryCache) {}
 
@@ -22,27 +22,22 @@ export class HistoryIndexer {
 		this.cancelled = true;
 	}
 
-	async indexFile(file: TFile, full = false, onVersion?: () => void): Promise<number> {
-		const checkpoint = full ? undefined : this.cache.checkpoints[file.path];
-		const result = await this.client.listVersions(file.path, checkpoint?.newestUid);
+	async indexFile(file: TFile, onVersion?: () => void): Promise<number> {
+		const result = await this.client.listVersions(file.path);
 		if (result.versions.length === 0) return 0;
 
-		const incremental = Boolean(checkpoint && result.foundStop);
-		if (!incremental) removeFileTransitions(this.cache, file.path);
-		const chronological = [...result.versions].reverse();
-		let startIndex = 0;
-		const anchor = chronological[0];
+		removeFileTransitions(this.cache, file.path);
+		const dailyVersions = this.dailySnapshots(result.versions);
+		const anchor = dailyVersions[0];
 		if (!anchor) return 0;
-		const readable = chronological.filter((version, index) => index === 0 || (!version.deleted && !version.folder));
-		const contents = await this.readVersions(readable);
+		const contents = await this.readVersions(dailyVersions);
 		let previous = contents.get(anchor.uid) ?? '';
-		startIndex = 1;
 
 		let processed = 0;
-		for (let index = startIndex; index < chronological.length; index++) {
+		for (let index = 1; index < dailyVersions.length; index++) {
 			if (this.cancelled) break;
-			const version = chronological[index];
-			if (!version || version.deleted || version.folder) continue;
+			const version = dailyVersions[index];
+			if (!version) continue;
 			const current = contents.get(version.uid);
 			if (current === undefined) continue;
 			const id = transitionId(version.uid);
@@ -50,6 +45,7 @@ export class HistoryIndexer {
 			previous = current;
 			processed++;
 			onVersion?.();
+			await new Promise<void>(resolve => window.setTimeout(resolve, 0));
 		}
 
 		if (!this.cancelled) {
@@ -61,6 +57,18 @@ export class HistoryIndexer {
 			};
 		}
 		return processed;
+	}
+
+	private dailySnapshots<T extends { uid: number; ts: number; deleted: boolean; folder: boolean }>(versions: T[]): T[] {
+		const newestByDay = new Map<string, T>();
+		for (const version of versions) {
+			if (version.deleted || version.folder) continue;
+			const date = new Date(version.ts);
+			const day = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+			const selected = newestByDay.get(day);
+			if (!selected || version.ts > selected.ts) newestByDay.set(day, version);
+		}
+		return Array.from(newestByDay.values()).sort((a, b) => a.ts - b.ts);
 	}
 
 	private async readVersions(versions: Array<{ uid: number }>): Promise<Map<number, string>> {
@@ -100,7 +108,7 @@ export class HistoryIndexer {
 				if (!file) return;
 				activePaths.add(file.path);
 				emit(false);
-				await this.indexFile(file, false, () => {
+				await this.indexFile(file, () => {
 					versions++;
 					emit(false);
 				});

@@ -27,7 +27,7 @@ export interface FileCheckpoint {
 }
 
 export interface EditHistoryCache {
-	schemaVersion: 1;
+	schemaVersion: 2;
 	trackingStartedAt: number;
 	clearedAt: number;
 	transitions: Record<string, CachedTransition>;

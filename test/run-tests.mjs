@@ -46,29 +46,36 @@ await build({ entryPoints: [new URL('../src/indexer.ts', import.meta.url).pathna
 const { HistoryIndexer } = await import(indexerBundle);
 const versions = [
 	{ uid: 2, ts: new Date('2026-01-02T12:00:00').getTime(), path: 'Note.md', size: 7, device: 'test', deleted: false, folder: false },
+	{ uid: 4, ts: new Date('2026-01-01T18:00:00').getTime(), path: 'Note.md', size: 5, device: 'test', deleted: false, folder: false },
 	{ uid: 1, ts: new Date('2026-01-01T12:00:00').getTime(), path: 'Note.md', size: 3, device: 'test', deleted: false, folder: false },
 ];
-const content = new Map([[1, 'one'], [2, 'one two'], [3, 'one two three']]);
+const content = new Map([[1, 'one'], [4, 'one draft'], [2, 'one two'], [3, 'one two three']]);
 const client = {
-	async listVersions(_path, stopAtUid) {
-		if (stopAtUid === 2) return { versions: [{ ...versions[0], uid: 3, ts: new Date('2026-01-03T12:00:00').getTime() }, versions[0]], foundStop: true };
+	callCount: 0,
+	async listVersions() {
+		this.callCount++;
+		if (this.callCount > 1) return { versions: [{ ...versions[0], uid: 3, ts: new Date('2026-01-03T12:00:00').getTime() }, ...versions], foundStop: false };
 		return { versions, foundStop: false };
 	},
 	async readVersion(uid) { return content.get(uid); },
 };
-const cache = { schemaVersion: 1, trackingStartedAt: 0, clearedAt: 0, transitions: {}, checkpoints: {} };
+const cache = { schemaVersion: 2, trackingStartedAt: 0, clearedAt: 0, transitions: {}, checkpoints: {} };
 const file = { path: 'Note.md', stat: { mtime: 10 } };
 const indexer = new HistoryIndexer(client, cache);
-assert.equal(await indexer.indexFile(file, true), 1);
-assert.equal(Object.keys(cache.transitions).length, 1);
-assert.deepEqual(cache.transitions['2'].counts.words, { added: 1, removed: 0 });
-file.stat.mtime = 20;
 assert.equal(await indexer.indexFile(file), 1);
+assert.equal(Object.keys(cache.transitions).length, 1);
+assert.deepEqual(cache.transitions['2'].counts.words, { added: 1, removed: 1 });
+file.stat.mtime = 20;
+assert.equal(await indexer.indexFile(file), 2);
 assert.equal(Object.keys(cache.transitions).length, 2);
 assert.deepEqual(cache.transitions['3'].counts.words, { added: 1, removed: 0 });
 
-const progressCache = { schemaVersion: 1, trackingStartedAt: 0, clearedAt: 0, transitions: {}, checkpoints: {} };
-const progressIndexer = new HistoryIndexer(client, progressCache);
+const progressCache = { schemaVersion: 2, trackingStartedAt: 0, clearedAt: 0, transitions: {}, checkpoints: {} };
+const progressClient = {
+	async listVersions() { return { versions, foundStop: false }; },
+	async readVersion(uid) { return content.get(uid); },
+};
+const progressIndexer = new HistoryIndexer(progressClient, progressCache);
 const progress = [];
 await progressIndexer.indexFiles([{ ...file, path: 'One.md' }, { ...file, path: 'Two.md' }], 2, update => progress.push(update));
 assert.ok(progress.some(update => update.activePaths.length === 2));
