@@ -158,6 +158,10 @@
 	overflow: hidden;
 }
 
+.edit-history-view .edit-heatmap-month-view {
+	max-width: 420px;
+}
+
 .edit-heatmap-month-header {
 	color: var(--text-muted);
 	font-size: 0.6em;
