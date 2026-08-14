@@ -118,7 +118,6 @@ export default class EditHistoryPlugin extends Plugin {
 		if (hasScope(this.getScope(view.scopeKey))) {
 			if (this.isImporting && expanded) {
 				this.restartScanRequested = true;
-				this.cancelImport();
 			} else if (!this.isImporting) {
 				void this.importAllHistory();
 			}

@@ -12,6 +12,7 @@ assert.match(source, /diffLines/);
 assert.match(source, /diffChars/);
 
 const cacheSource = await fs.readFile(new URL('../src/cache.ts', import.meta.url), 'utf8');
+const mainSource = await fs.readFile(new URL('../src/main.ts', import.meta.url), 'utf8');
 const scopeSource = await fs.readFile(new URL('../src/scope.ts', import.meta.url), 'utf8');
 const pathLabelSource = await fs.readFile(new URL('../src/path-label.ts', import.meta.url), 'utf8');
 await transform(source, { loader: 'ts', format: 'esm' });
@@ -20,6 +21,8 @@ await transform(scopeSource, { loader: 'ts', format: 'esm' });
 await transform(pathLabelSource, { loader: 'ts', format: 'esm' });
 assert.match(scopeSource, /\.excalidraw\.md/);
 assert.match(scopeSource, /\['excalidraw-plugin'\]/);
+const embeddedRegistration = mainSource.slice(mainSource.indexOf('registerEmbeddedView'), mainSource.indexOf('unregisterEmbeddedView'));
+assert.doesNotMatch(embeddedRegistration, /cancelImport/);
 
 const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'edit-history-test-'));
 const bundle = path.join(tempDir, 'metrics.mjs');
