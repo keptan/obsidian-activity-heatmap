@@ -23,6 +23,10 @@ assert.match(scopeSource, /\.excalidraw\.md/);
 assert.match(scopeSource, /\['excalidraw-plugin'\]/);
 const embeddedRegistration = mainSource.slice(mainSource.indexOf('registerEmbeddedView'), mainSource.indexOf('unregisterEmbeddedView'));
 assert.doesNotMatch(embeddedRegistration, /cancelImport/);
+const externalSettingsChange = mainSource.slice(mainSource.indexOf('onExternalSettingsChange'));
+assert.match(externalSettingsChange, /closeScopePicker\(false\)/);
+assert.match(externalSettingsChange, /removeHeatmapOverlays\(\)/);
+assert.match(externalSettingsChange, /restartScanRequested = true/);
 
 const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'edit-history-test-'));
 const bundle = path.join(tempDir, 'metrics.mjs');

@@ -474,11 +474,23 @@ export default class EditHistoryPlugin extends Plugin {
 	}
 
 	async onExternalSettingsChange(): Promise<void> {
+		closeScopePicker(false);
+		removeHeatmapOverlays();
+		const previousPaths = new Set(this.scopePaths);
 		const stored = await this.loadData() as StoredState | null;
 		if (stored?.cache?.schemaVersion === 2) this.cache = mergeCaches(this.cache, stored.cache);
 		if (stored?.settings) this.settings = this.normalizeSettings(stored.settings);
 		if (stored?.viewScopes) this.viewScopes = this.normalizeViewScopes(stored.viewScopes);
+		this.rebuildScopePaths();
+		const expanded = Array.from(this.scopePaths).some(path => !previousPaths.has(path));
 		await this.saveState();
-		await this.loadSelectedScope();
+		this.refreshViews();
+		if (this.scopePaths.size === 0) {
+			if (this.isImporting) this.cancelImport();
+		} else if (this.isImporting && expanded) {
+			this.restartScanRequested = true;
+		} else if (!this.isImporting && expanded) {
+			void this.importAllHistory().catch(error => console.error('Edit History Heatmap: External scope import failed', error));
+		}
 	}
 }
