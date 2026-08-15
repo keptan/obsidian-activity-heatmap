@@ -24,6 +24,7 @@ export interface FileCheckpoint {
 	newestUid: number;
 	newestTimestamp: number;
 	mtime: number;
+	initialSnapshotCounted?: boolean;
 }
 
 export interface EditHistoryCache {

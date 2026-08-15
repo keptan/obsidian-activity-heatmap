@@ -73,13 +73,41 @@ const client = {
 const cache = { schemaVersion: 2, trackingStartedAt: 0, clearedAt: 0, transitions: {}, checkpoints: {} };
 const file = { path: 'Note.md', stat: { mtime: 10 } };
 const indexer = new HistoryIndexer(client, cache);
-assert.equal(await indexer.indexFile(file), 1);
-assert.equal(Object.keys(cache.transitions).length, 1);
-assert.deepEqual(cache.transitions['2'].counts.words, { added: 1, removed: 1 });
-file.stat.mtime = 20;
 assert.equal(await indexer.indexFile(file), 2);
 assert.equal(Object.keys(cache.transitions).length, 2);
+assert.deepEqual(cache.transitions['4'].counts.words, { added: 2, removed: 0 });
+assert.deepEqual(cache.transitions['2'].counts.words, { added: 1, removed: 1 });
+assert.equal(cache.checkpoints['Note.md'].initialSnapshotCounted, true);
+file.stat.mtime = 20;
+assert.equal(await indexer.indexFile(file), 3);
+assert.equal(Object.keys(cache.transitions).length, 3);
 assert.deepEqual(cache.transitions['3'].counts.words, { added: 1, removed: 0 });
+
+const oneShotCache = { schemaVersion: 2, trackingStartedAt: 0, clearedAt: 0, transitions: {}, checkpoints: {} };
+const oneShotIndexer = new HistoryIndexer({
+	async listVersions() { return { versions: [versions[2]], foundStop: false }; },
+	async readVersion() { return 'written once'; },
+}, oneShotCache);
+assert.equal(await oneShotIndexer.indexFile(file), 1);
+assert.deepEqual(oneShotCache.transitions['1'].counts.words, { added: 2, removed: 0 });
+
+const legacyCache = {
+	schemaVersion: 2,
+	trackingStartedAt: 0,
+	clearedAt: 0,
+	transitions: {},
+	checkpoints: { 'Note.md': { newestUid: 2, newestTimestamp: versions[0].ts, mtime: 10 } },
+};
+const legacyReads = [];
+const legacyIndexer = new HistoryIndexer({
+	async listVersions() { return { versions, foundStop: false }; },
+	async readVersion(uid) { legacyReads.push(uid); return content.get(uid); },
+}, legacyCache);
+assert.equal(await legacyIndexer.backfillInitialSnapshot({ path: 'Note.md', stat: { mtime: 10 } }), 1);
+assert.deepEqual(legacyReads, [4]);
+assert.deepEqual(legacyCache.transitions['4'].counts.words, { added: 2, removed: 0 });
+assert.equal(legacyCache.checkpoints['Note.md'].initialSnapshotCounted, true);
+assert.equal(await legacyIndexer.backfillInitialSnapshot({ path: 'Note.md', stat: { mtime: 10 } }), 0);
 
 const preserved = structuredClone(cache);
 const failingIndexer = new HistoryIndexer({
@@ -102,7 +130,7 @@ const progress = [];
 await progressIndexer.indexFiles([{ ...file, path: 'One.md' }, { ...file, path: 'Two.md' }], 2, update => progress.push(update));
 assert.ok(progress.some(update => update.activePaths.length === 2));
 assert.equal(progress.at(-1).completedFiles, 2);
-assert.equal(progress.at(-1).versions, 2);
+assert.equal(progress.at(-1).versions, 4);
 assert.ok(progress.every((update, index) => index === 0 || update.versions >= progress[index - 1].versions));
 await fs.rm(tempDir, { recursive: true });
 

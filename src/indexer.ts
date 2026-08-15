@@ -30,11 +30,11 @@ export class HistoryIndexer {
 		const anchor = dailyVersions[0];
 		if (!anchor) return 0;
 		const contents = await this.readVersions(dailyVersions);
-		let previous = contents.get(anchor.uid) ?? '';
+		let previous = '';
 		const replacements: EditHistoryCache['transitions'] = {};
 
 		let processed = 0;
-		for (let index = 1; index < dailyVersions.length; index++) {
+		for (let index = 0; index < dailyVersions.length; index++) {
 			if (this.cancelled) break;
 			const version = dailyVersions[index];
 			if (!version) continue;
@@ -56,9 +56,25 @@ export class HistoryIndexer {
 				newestUid: newest.uid,
 				newestTimestamp: newest.ts,
 				mtime: file.stat.mtime,
+				initialSnapshotCounted: true,
 			};
 		}
 		return processed;
+	}
+
+	async backfillInitialSnapshot(file: TFile, onVersion?: () => void): Promise<number> {
+		const checkpoint = this.cache.checkpoints[file.path];
+		if (!checkpoint || checkpoint.initialSnapshotCounted || this.cancelled) return 0;
+		const result = await this.client.listVersions(file.path);
+		const anchor = this.dailySnapshots(result.versions)[0];
+		if (!anchor || this.cancelled) return 0;
+		const content = await this.client.readVersion(anchor.uid);
+		if (this.cancelled) return 0;
+		const id = transitionId(anchor.uid);
+		this.cache.transitions[id] = makeTransition(id, file.path, anchor.ts, await calculateMetrics('', content));
+		checkpoint.initialSnapshotCounted = true;
+		onVersion?.();
+		return 1;
 	}
 
 	private dailySnapshots<T extends { uid: number; ts: number; deleted: boolean; folder: boolean }>(versions: T[]): T[] {
@@ -120,6 +136,21 @@ export class HistoryIndexer {
 			}
 		};
 		await Promise.all(Array.from({ length: Math.max(1, concurrency) }, () => worker()));
+		return versions;
+	}
+
+	async backfillInitialSnapshots(files: TFile[], onProgress: (progress: ImportProgress) => void): Promise<number> {
+		this.cancelled = false;
+		let completedFiles = 0;
+		let versions = 0;
+		for (const file of files) {
+			if (this.cancelled) break;
+			onProgress({ completedFiles, totalFiles: files.length, versions, activePaths: [file.path], fileCompleted: false });
+			versions += await this.backfillInitialSnapshot(file);
+			completedFiles++;
+			onProgress({ completedFiles, totalFiles: files.length, versions, activePaths: [], fileCompleted: true });
+			if (!this.cancelled) await new Promise<void>(resolve => window.setTimeout(resolve, 250));
+		}
 		return versions;
 	}
 }

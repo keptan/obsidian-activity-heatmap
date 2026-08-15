@@ -29,7 +29,7 @@ Put `month` inside the block if you want it to start in month view.
 - Only the final available version of each note on each calendar day is compared. Revisions made and undone within the same day are intentionally not counted repeatedly.
 - Excalidraw drawings are excluded, including drawings saved with ordinary `.md` filenames.
 - The cache only contains dates, file paths, version IDs, and aggregate counts. There is no telemetry.
-- The oldest available Sync version is used as a baseline. History that Obsidian Sync no longer retains cannot be recovered.
+- The oldest available daily version is counted as the note's creation, then later days are compared against it. History that Obsidian Sync no longer retains cannot be recovered.
 - If community plugin settings are included in your Sync configuration, the aggregate cache can be shared between devices.
 
 ## Installing

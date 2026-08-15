@@ -165,11 +165,16 @@ export default class EditHistoryPlugin extends Plugin {
 		this.setStatus('Preparing historical import…');
 		this.refreshViews();
 		this.indexer = new HistoryIndexer(this.client, this.cache);
-		const files = this.getFilesInScanScope().filter(file => {
+		const scopedFiles = this.getFilesInScanScope();
+		const files = scopedFiles.filter(file => {
 			const checkpoint = this.cache.checkpoints[file.path];
 			return !checkpoint || file.stat.mtime > checkpoint.mtime;
 		});
-		if (files.length === 0) {
+		const backfillFiles = scopedFiles.filter(file => {
+			const checkpoint = this.cache.checkpoints[file.path];
+			return Boolean(checkpoint && !checkpoint.initialSnapshotCounted && file.stat.mtime <= checkpoint.mtime);
+		});
+		if (files.length === 0 && backfillFiles.length === 0) {
 			this.isImporting = false;
 			this.indexer = null;
 			this.setStatus('Scope history is up to date');
@@ -178,7 +183,7 @@ export default class EditHistoryPlugin extends Plugin {
 			return;
 		}
 		try {
-			const versions = await this.indexer.indexFiles(files, 2, progress => {
+			let versions = await this.indexer.indexFiles(files, 2, progress => {
 				const active = progress.activePaths.length > 0
 					? ` · Scanning ${progress.activePaths[0]}${progress.activePaths.length > 1 ? ` +${progress.activePaths.length - 1} more` : ''}`
 					: '';
@@ -186,10 +191,18 @@ export default class EditHistoryPlugin extends Plugin {
 				if (progress.fileCompleted) this.scheduleProgressRefresh();
 				if (progress.fileCompleted && progress.completedFiles > 0 && progress.completedFiles % 100 === 0) void this.saveState();
 			});
+			if (!this.cancelRequested && backfillFiles.length > 0) {
+				versions += await this.indexer.backfillInitialSnapshots(backfillFiles, progress => {
+					const active = progress.activePaths[0] ? ` · Scanning ${progress.activePaths[0]}` : '';
+					this.setStatus(`Updating creation counts ${progress.completedFiles}/${progress.totalFiles}${active}`);
+					if (progress.fileCompleted) this.scheduleProgressRefresh();
+					if (progress.fileCompleted && progress.completedFiles > 0 && progress.completedFiles % 25 === 0) void this.saveState();
+				});
+			}
 			if (this.cancelRequested) {
 				this.setStatus('History scan paused');
 			} else {
-				this.setStatus(`Imported ${versions} versions across ${files.length} files`);
+				this.setStatus(`Imported ${versions} versions across ${files.length + backfillFiles.length} files`);
 				new Notice(this.statusText);
 			}
 		} finally {
@@ -292,6 +305,7 @@ export default class EditHistoryPlugin extends Plugin {
 	private async loadSelectedScope(): Promise<void> {
 		this.rebuildScopePaths();
 		this.refreshViews();
+		if (this.scopePaths.size > 0) void this.importAllHistory().catch(error => console.error('Edit History Heatmap: Startup import failed', error));
 	}
 
 	async clearCache(): Promise<void> {

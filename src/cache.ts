@@ -12,7 +12,12 @@ export function mergeCaches(local: EditHistoryCache, remote: EditHistoryCache): 
 	if (remoteClearedAt > localClearedAt) return remote;
 	const checkpoints: Record<string, FileCheckpoint> = { ...local.checkpoints };
 	for (const [path, checkpoint] of Object.entries(remote.checkpoints)) {
-		if (!checkpoints[path] || checkpoint.newestTimestamp > checkpoints[path].newestTimestamp) checkpoints[path] = checkpoint;
+		const existing = checkpoints[path];
+		if (!existing || checkpoint.newestTimestamp > existing.newestTimestamp) {
+			checkpoints[path] = { ...checkpoint, initialSnapshotCounted: checkpoint.initialSnapshotCounted || existing?.initialSnapshotCounted };
+		} else if (checkpoint.initialSnapshotCounted) {
+			existing.initialSnapshotCounted = true;
+		}
 	}
 	return {
 		schemaVersion: 2,
