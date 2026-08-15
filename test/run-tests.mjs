@@ -81,6 +81,17 @@ assert.equal(await indexer.indexFile(file), 2);
 assert.equal(Object.keys(cache.transitions).length, 2);
 assert.deepEqual(cache.transitions['3'].counts.words, { added: 1, removed: 0 });
 
+const preserved = structuredClone(cache);
+const failingIndexer = new HistoryIndexer({
+	async listVersions() { return { versions, foundStop: false }; },
+	async readVersion(uid) {
+		if (uid === 2) throw new Error('test read failure');
+		return content.get(uid);
+	},
+}, cache);
+await assert.rejects(() => failingIndexer.indexFile(file), /test read failure/);
+assert.deepEqual(cache, preserved);
+
 const progressCache = { schemaVersion: 2, trackingStartedAt: 0, clearedAt: 0, transitions: {}, checkpoints: {} };
 const progressClient = {
 	async listVersions() { return { versions, foundStop: false }; },

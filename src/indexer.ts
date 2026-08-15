@@ -26,12 +26,12 @@ export class HistoryIndexer {
 		const result = await this.client.listVersions(file.path);
 		if (result.versions.length === 0) return 0;
 
-		removeFileTransitions(this.cache, file.path);
 		const dailyVersions = this.dailySnapshots(result.versions);
 		const anchor = dailyVersions[0];
 		if (!anchor) return 0;
 		const contents = await this.readVersions(dailyVersions);
 		let previous = contents.get(anchor.uid) ?? '';
+		const replacements: EditHistoryCache['transitions'] = {};
 
 		let processed = 0;
 		for (let index = 1; index < dailyVersions.length; index++) {
@@ -41,7 +41,7 @@ export class HistoryIndexer {
 			const current = contents.get(version.uid);
 			if (current === undefined) continue;
 			const id = transitionId(version.uid);
-			this.cache.transitions[id] = makeTransition(id, file.path, version.ts, await calculateMetrics(previous, current));
+			replacements[id] = makeTransition(id, file.path, version.ts, await calculateMetrics(previous, current));
 			previous = current;
 			processed++;
 			onVersion?.();
@@ -49,6 +49,8 @@ export class HistoryIndexer {
 		}
 
 		if (!this.cancelled) {
+			removeFileTransitions(this.cache, file.path);
+			Object.assign(this.cache.transitions, replacements);
 			const newest = result.versions[0];
 			if (newest) this.cache.checkpoints[file.path] = {
 				newestUid: newest.uid,
