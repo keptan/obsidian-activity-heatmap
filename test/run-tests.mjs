@@ -25,7 +25,8 @@ const embeddedRegistration = mainSource.slice(mainSource.indexOf('registerEmbedd
 assert.doesNotMatch(embeddedRegistration, /cancelImport/);
 const externalSettingsChange = mainSource.slice(mainSource.indexOf('onExternalSettingsChange'));
 assert.match(externalSettingsChange, /closeScopePicker\(false\)/);
-assert.match(externalSettingsChange, /removeHeatmapOverlays\(\)/);
+assert.doesNotMatch(externalSettingsChange, /removeHeatmapOverlays\(\)/);
+assert.doesNotMatch(externalSettingsChange, /await this\.saveState\(\)/);
 assert.match(externalSettingsChange, /restartScanRequested = true/);
 
 const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'edit-history-test-'));
@@ -51,6 +52,20 @@ assert.deepEqual(Object.fromEntries(shortestUniquePathLabels([
 	'Archive/Scene.md': 'Archive/Scene.md',
 	'Notes/Ideas.md': 'Ideas.md',
 });
+
+const cacheBundle = path.join(tempDir, 'cache.mjs');
+await build({ entryPoints: [new URL('../src/cache.ts', import.meta.url).pathname], outfile: cacheBundle, bundle: true, platform: 'node', format: 'esm' });
+const { cachesEqual, mergeCaches } = await import(cacheBundle);
+const localCache = {
+	schemaVersion: 2, trackingStartedAt: 1, clearedAt: 0, transitions: {},
+	checkpoints: { 'Note.md': { newestUid: 1, newestTimestamp: 1, mtime: 1 } },
+};
+const remoteCache = structuredClone(localCache);
+remoteCache.checkpoints['Note.md'].initialSnapshotCounted = true;
+const mergedCache = mergeCaches(localCache, remoteCache);
+assert.equal(localCache.checkpoints['Note.md'].initialSnapshotCounted, undefined);
+assert.equal(mergedCache.checkpoints['Note.md'].initialSnapshotCounted, true);
+assert.equal(cachesEqual(localCache, mergedCache), false);
 
 const indexerBundle = path.join(tempDir, 'indexer.mjs');
 await build({ entryPoints: [new URL('../src/indexer.ts', import.meta.url).pathname], outfile: indexerBundle, bundle: true, platform: 'node', format: 'esm' });
@@ -79,7 +94,7 @@ assert.deepEqual(cache.transitions['4'].counts.words, { added: 2, removed: 0 });
 assert.deepEqual(cache.transitions['2'].counts.words, { added: 1, removed: 1 });
 assert.equal(cache.checkpoints['Note.md'].initialSnapshotCounted, true);
 file.stat.mtime = 20;
-assert.equal(await indexer.indexFile(file), 3);
+assert.equal(await indexer.indexFile(file), 1);
 assert.equal(Object.keys(cache.transitions).length, 3);
 assert.deepEqual(cache.transitions['3'].counts.words, { added: 1, removed: 0 });
 

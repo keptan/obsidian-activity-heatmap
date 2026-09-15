@@ -10,7 +10,9 @@ export function mergeCaches(local: EditHistoryCache, remote: EditHistoryCache): 
 	const remoteClearedAt = remote.clearedAt ?? 0;
 	if (localClearedAt > remoteClearedAt) return local;
 	if (remoteClearedAt > localClearedAt) return remote;
-	const checkpoints: Record<string, FileCheckpoint> = { ...local.checkpoints };
+	const checkpoints: Record<string, FileCheckpoint> = Object.fromEntries(
+		Object.entries(local.checkpoints).map(([path, checkpoint]) => [path, { ...checkpoint }]),
+	);
 	for (const [path, checkpoint] of Object.entries(remote.checkpoints)) {
 		const existing = checkpoints[path];
 		if (!existing || checkpoint.newestTimestamp > existing.newestTimestamp) {
@@ -26,6 +28,25 @@ export function mergeCaches(local: EditHistoryCache, remote: EditHistoryCache): 
 		transitions: { ...local.transitions, ...remote.transitions },
 		checkpoints,
 	};
+}
+
+export function cachesEqual(left: EditHistoryCache, right: EditHistoryCache): boolean {
+	if (left.schemaVersion !== right.schemaVersion
+		|| left.trackingStartedAt !== right.trackingStartedAt
+		|| left.clearedAt !== right.clearedAt) return false;
+	const leftTransitions = Object.entries(left.transitions);
+	const rightTransitions = Object.entries(right.transitions);
+	if (leftTransitions.length !== rightTransitions.length) return false;
+	for (const [id, transition] of leftTransitions) {
+		if (JSON.stringify(transition) !== JSON.stringify(right.transitions[id])) return false;
+	}
+	const leftCheckpoints = Object.entries(left.checkpoints);
+	const rightCheckpoints = Object.entries(right.checkpoints);
+	if (leftCheckpoints.length !== rightCheckpoints.length) return false;
+	for (const [path, checkpoint] of leftCheckpoints) {
+		if (JSON.stringify(checkpoint) !== JSON.stringify(right.checkpoints[path])) return false;
+	}
+	return true;
 }
 
 export interface FileDayAggregate {

@@ -1,5 +1,5 @@
 import { getAllTags, Notice, Plugin, TFile } from 'obsidian';
-import { createCache, mergeCaches, renameCachedFile } from './cache';
+import { cachesEqual, createCache, mergeCaches, renameCachedFile } from './cache';
 import { HistoryIndexer } from './indexer';
 import { EditHistorySettingTab } from './settings';
 import { SyncHistoryClient } from './sync-history';
@@ -188,14 +188,12 @@ export default class EditHistoryPlugin extends Plugin {
 					? ` · Scanning ${progress.activePaths[0]}${progress.activePaths.length > 1 ? ` +${progress.activePaths.length - 1} more` : ''}`
 					: '';
 				this.setStatus(`${progress.completedFiles}/${progress.totalFiles} files · ${progress.versions} versions${active}`);
-				if (progress.fileCompleted) this.scheduleProgressRefresh();
 				if (progress.fileCompleted && progress.completedFiles > 0 && progress.completedFiles % 100 === 0) void this.saveState();
 			});
 			if (!this.cancelRequested && backfillFiles.length > 0) {
 				versions += await this.indexer.backfillInitialSnapshots(backfillFiles, progress => {
 					const active = progress.activePaths[0] ? ` · Scanning ${progress.activePaths[0]}` : '';
 					this.setStatus(`Updating creation counts ${progress.completedFiles}/${progress.totalFiles}${active}`);
-					if (progress.fileCompleted) this.scheduleProgressRefresh();
 					if (progress.fileCompleted && progress.completedFiles > 0 && progress.completedFiles % 25 === 0) void this.saveState();
 				});
 			}
@@ -489,16 +487,23 @@ export default class EditHistoryPlugin extends Plugin {
 
 	async onExternalSettingsChange(): Promise<void> {
 		closeScopePicker(false);
-		removeHeatmapOverlays();
 		const previousPaths = new Set(this.scopePaths);
+		const previousSettings = JSON.stringify(this.settings);
+		const previousViewScopes = JSON.stringify(this.viewScopes);
 		const stored = await this.loadData() as StoredState | null;
-		if (stored?.cache?.schemaVersion === 2) this.cache = mergeCaches(this.cache, stored.cache);
+		let cacheChanged = false;
+		if (stored?.cache?.schemaVersion === 2) {
+			const merged = mergeCaches(this.cache, stored.cache);
+			cacheChanged = !cachesEqual(this.cache, merged);
+			this.cache = merged;
+		}
 		if (stored?.settings) this.settings = this.normalizeSettings(stored.settings);
 		if (stored?.viewScopes) this.viewScopes = this.normalizeViewScopes(stored.viewScopes);
 		this.rebuildScopePaths();
 		const expanded = Array.from(this.scopePaths).some(path => !previousPaths.has(path));
-		await this.saveState();
-		this.refreshViews();
+		const settingsChanged = previousSettings !== JSON.stringify(this.settings);
+		const scopesChanged = previousViewScopes !== JSON.stringify(this.viewScopes);
+		if (cacheChanged || settingsChanged || scopesChanged) this.refreshViews();
 		if (this.scopePaths.size === 0) {
 			if (this.isImporting) this.cancelImport();
 		} else if (this.isImporting && expanded) {
