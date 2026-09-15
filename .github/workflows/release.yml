@@ -44,7 +44,7 @@ jobs:
             main.js
             styles.css
 
-      - name: Create draft release
+      - name: Create release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -52,5 +52,4 @@ jobs:
           gh release create "$tag" \
             --title="$tag" \
             --generate-notes \
-            --draft \
             main.js manifest.json styles.css
